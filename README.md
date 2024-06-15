@@ -14,7 +14,7 @@ SEO Bhishma CLI is a comprehensive CLI tool designed for various SEO-related tas
 You can install the package via pip:
 
 ```bash
-pip install seo_blackbox
+pip install seo-bhishma-cli
 ```
 
 ## Usage
