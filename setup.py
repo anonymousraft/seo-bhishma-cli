@@ -17,7 +17,8 @@ setup(
         'pandas',
         'tqdm',
         'beautifulsoup4',
-        'art'
+        'art',
+        'fake_useragent'
     ],
     entry_points={
         'console_scripts': [
