@@ -1,0 +1,6 @@
+click 
+requests 
+beautifulsoup4 
+pandas 
+art
+tqdm
