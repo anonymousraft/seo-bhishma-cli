@@ -18,7 +18,8 @@ setup(
         'tqdm',
         'beautifulsoup4',
         'art',
-        'fake_useragent'
+        'fake_useragent',
+        'lxml'
     ],
     entry_points={
         'console_scripts': [

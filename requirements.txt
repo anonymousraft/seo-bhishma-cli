@@ -5,3 +5,4 @@ pandas
 art
 tqdm
 fake_useragent
+lxml
