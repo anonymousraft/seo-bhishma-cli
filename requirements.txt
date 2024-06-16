@@ -6,3 +6,5 @@ art
 tqdm
 fake_useragent
 lxml
+scikit-learn
+openai

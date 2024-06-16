@@ -19,7 +19,10 @@ setup(
         'beautifulsoup4',
         'art',
         'fake_useragent',
-        'lxml'
+        'lxml',
+        'scikit-learn',
+        'openai',
+        'pyyaml'
     ],
     entry_points={
         'console_scripts': [
