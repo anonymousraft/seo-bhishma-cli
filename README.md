@@ -1,13 +1,15 @@
 
 # SEO Bhishma CLI
 
-SEO Bhishma CLI is a comprehensive CLI tool designed for various SEO-related tasks, such as checking backlinks, downloading and parsing sitemaps, and bulk indexing checking. It provides a suite of tools to help SEO professionals streamline their workflow and improve website performance.
+SEO Bhishma CLI is a comprehensive CLI tool designed for various SEO-related tasks. It provides a suite of tools to help SEO professionals streamline & automate their workflow and improve website performance.
 
 ## Features
 
 - **LinkSniper**: Check if backlinks are live and verify anchor texts.
 - **SiteMapper**: Download and parse sitemaps, including nested sitemaps and various sitemap types (image, video, news), and export URLs to CSV.
-- **IndexSpy**: Bulk indexing checker.
+- **IndexSpy**: Bulk indexing checker with proxy options and user-agents. Now check unlimited URLs
+- **KeywordSorcerer**: GPT4 based keyword clusteriser with different methods
+- **Sitemap Generator**:Powerful sitemap generator from URL list. Generate nested, compressed sitemap hassle free.
 
 ## Installation
 
@@ -112,24 +114,63 @@ Example:
 Enter the URL to check indexing status: https://example.com
 ```
 
-## Project Structure
+#### Bulk Indexing Checker
 
+Check the indexing status of multiple URLs:
+
+```bash
+seo-bhishma-cli index_spy
 ```
-seo_blackbox/
-│
-├── seo_blackbox/
-│   ├── __init__.py
-│   ├── cli.py
-│   ├── constants.py
-│   ├── link_sniper.py
-│   ├── site_mapper.py
-│   └── index_spy.py
-│
-├── setup.py
-├── README.md
-├── requirements.txt
-└── MANIFEST.in
+##### Features
+
+1. Proxy Support: Supports HTTP, HTTPS, SOCKS4, and SOCKS5 proxies.
+2. CAPTCHA Handling: Automatically switches proxies and user-agents to handle CAPTCHAs.
+3. Progress Bar: Displays progress during the bulk checking process.
+4. Error Handling: Provides robust error handling and status messages.
+
+##### Usage
+Follow the prompts to provide the input file, proxy settings, and other options.
+
+### Keyword Clustering
+
+Cluster keywords based on semantic relevance:
+
+```bash
+seo-bhishma-cli keyword_sorcerer
 ```
+
+#### Features
+
+1. OpenAI GPT-4: Uses OpenAI's GPT-4 to generate embeddings for the keywords.
+2. Clustering Algorithms: Supports multiple clustering algorithms:
+    - KMeans
+    - Agglomerative Clustering
+    - DBSCAN
+    - Spectral Clustering
+3. Optimal Clusters: Automatically determines the optimal number of clusters based on the number of keywords.
+4. Intent-Based Clustering: Clusters keywords based on their semantic intent.
+5. Error Handling: Provides robust error handling and status messages.
+
+Usage
+Follow the prompts to provide the input file, output file, and choose the clustering method.
+
+### Sitemap Generator
+Generate sitemaps from a list of URLs:
+
+```bash
+seo-bhishma-cli sitemap_generator
+```
+
+#### Features
+1. Single Sitemap: Generate a single sitemap from a list of URLs.
+2. Nested Sitemaps: Supports generating nested sitemaps with a specified URL limit per sitemap.
+3. Compressed Sitemaps: Option to create compressed sitemaps.
+4. Priority and Frequency: Allows setting priority and change frequency for the URLs.
+5. Error Handling: Provides robust error handling and status messages.
+
+#### Usage
+Follow the prompts to provide the input file, output file, and other options.
+
 
 ## Contributing
 
