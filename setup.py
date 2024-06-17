@@ -22,7 +22,8 @@ setup(
         'lxml',
         'scikit-learn',
         'openai',
-        'pyyaml'
+        'pyyaml',
+        'rich'
     ],
     entry_points={
         'console_scripts': [

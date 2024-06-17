@@ -8,3 +8,5 @@ fake_useragent
 lxml
 scikit-learn
 openai
+pyyaml
+rich

@@ -3,10 +3,35 @@ import pandas as pd
 import xml.etree.ElementTree as ET
 import gzip
 import click
-from tqdm import tqdm
 from urllib.parse import urlparse
+import logging
+from datetime import datetime
+from rich.console import Console
+from rich.progress import Progress, BarColumn, TimeRemainingColumn
+from rich.logging import RichHandler
+import os
+import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import signal
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(message)s', handlers=[RichHandler()])
+logger = logging.getLogger("rich")
+
+console = Console()
 
 NAMESPACE = {'ns': 'http://www.sitemaps.org/schemas/sitemap/0.9'}
+progress = None
+output_file = None
+
+def signal_handler(sig, frame):
+    console.log("[bold yellow]Process interrupted! Progress has been saved.[/bold yellow]")
+    if progress:
+        save_progress(progress['urls'], output_file)
+    exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 def download_sitemap(url):
     try:
@@ -18,80 +43,117 @@ def download_sitemap(url):
         else:
             return ET.fromstring(response.content)
     except requests.RequestException as e:
-        click.echo(click.style(f"Error downloading sitemap: {e}", fg="red"))
+        console.log(f"[bold red]Error downloading sitemap: {e}[/bold red]")
         return None
     except ET.ParseError as e:
-        click.echo(click.style(f"Error parsing sitemap: {e}", fg="red"))
+        console.log(f"[bold red]Error parsing sitemap: {e}[/bold red]")
         return None
 
-def parse_sitemap(root, urls, sitemap_name, level=0):
+def save_progress(urls, output_file):
+    temp_file = output_file + ".temp"
+    with open(temp_file, 'w') as f:
+        json.dump(urls, f)
+
+def load_progress(output_file):
+    temp_file = output_file + ".temp"
+    if os.path.exists(temp_file):
+        with open(temp_file, 'r') as f:
+            return json.load(f)
+    return []
+
+def parse_url_element(url_elem, sitemap_name):
+    try:
+        loc = url_elem.find('ns:loc', NAMESPACE).text
+        lastmod = url_elem.find('ns:lastmod', NAMESPACE).text if url_elem.find('ns:lastmod', NAMESPACE) is not None else ''
+        changefreq = url_elem.find('ns:changefreq', NAMESPACE).text if url_elem.find('ns:changefreq', NAMESPACE) is not None else ''
+        priority = url_elem.find('ns:priority', NAMESPACE).text if url_elem.find('ns:priority', NAMESPACE) is not None else ''
+
+        images = url_elem.findall('ns:image', NAMESPACE)
+        image_data = []
+        for image in images:
+            image_loc = image.find('ns:loc', NAMESPACE).text
+            image_caption = image.find('ns:caption', NAMESPACE).text if image.find('ns:caption', NAMESPACE) is not None else ''
+            image_data.append({'loc': image_loc, 'caption': image_caption})
+
+        videos = url_elem.findall('ns:video', NAMESPACE)
+        video_data = []
+        for video in videos:
+            video_loc = video.find('ns:content_loc', NAMESPACE).text if video.find('ns:content_loc', NAMESPACE) is not None else ''
+            video_title = video.find('ns:title', NAMESPACE).text if video.find('ns:title', NAMESPACE) is not None else ''
+            video_data.append({'loc': video_loc, 'title': video_title})
+
+        news = url_elem.findall('ns:news', NAMESPACE)
+        news_data = []
+        for news_item in news:
+            news_publication_date = news_item.find('ns:publication_date', NAMESPACE).text if news_item.find('ns:publication_date', NAMESPACE) is not None else ''
+            news_title = news_item.find('ns:title', NAMESPACE).text if news_item.find('ns:title', NAMESPACE) is not None else ''
+            news_data.append({'publication_date': news_publication_date, 'title': news_title})
+
+        return {
+            'sitemap_name': sitemap_name,
+            'loc': loc,
+            'lastmod': lastmod,
+            'changefreq': changefreq,
+            'priority': priority,
+            'images': image_data,
+            'videos': video_data,
+            'news': news_data
+        }
+    except Exception as e:
+        console.log(f"[bold red]Error parsing URL element: {e}[/bold red]")
+        return None
+
+def parse_sitemap(root, urls, sitemap_name, level=0, output_file=None):
     sitemaps = root.findall('ns:sitemap', NAMESPACE)
     if sitemaps:
-        click.echo(click.style(f"Found {len(sitemaps)} nested sitemaps. Parsing...", fg="blue"))
-        for i, sitemap in enumerate(tqdm(sitemaps, desc="Parsing sitemaps", colour="cyan"), start=1):
+        console.log(f"[blue]Found {len(sitemaps)} nested sitemaps. Parsing...[/blue]")
+        for i, sitemap in enumerate(sitemaps, start=1):
             loc = sitemap.find('ns:loc', NAMESPACE).text
-            click.echo(click.style(f"Parsing sitemap {i}/{len(sitemaps)}: {loc}", fg="yellow"))
+            console.log(f"[yellow]Parsing sitemap {i}/{len(sitemaps)}: {loc}[/yellow]")
             sitemap_root = download_sitemap(loc)
             if sitemap_root:
-                parse_sitemap(sitemap_root, urls, loc, level + 1)
+                parse_sitemap(sitemap_root, urls, loc, level + 1, output_file)
     else:
         url_count = len(root.findall('ns:url', NAMESPACE))
-        click.echo(click.style(f"Parsing {url_count} URLs in sitemap...", fg="blue"))
-        for url_elem in tqdm(root.findall('ns:url', NAMESPACE), desc="Parsing URLs", colour="cyan"):
-            loc = url_elem.find('ns:loc', NAMESPACE).text
-            lastmod = url_elem.find('ns:lastmod', NAMESPACE).text if url_elem.find('ns:lastmod', NAMESPACE) is not None else ''
-            changefreq = url_elem.find('ns:changefreq', NAMESPACE).text if url_elem.find('ns:changefreq', NAMESPACE) is not None else ''
-            priority = url_elem.find('ns:priority', NAMESPACE).text if url_elem.find('ns:priority', NAMESPACE) is not None else ''
-            
-            # Check for additional types of sitemaps (image, video, news)
-            images = url_elem.findall('ns:image', NAMESPACE)
-            image_data = []
-            for image in images:
-                image_loc = image.find('ns:loc', NAMESPACE).text
-                image_caption = image.find('ns:caption', NAMESPACE).text if image.find('ns:caption', NAMESPACE) is not None else ''
-                image_data.append({'loc': image_loc, 'caption': image_caption})
-            
-            videos = url_elem.findall('ns:video', NAMESPACE)
-            video_data = []
-            for video in videos:
-                video_loc = video.find('ns:content_loc', NAMESPACE).text if video.find('ns:content_loc', NAMESPACE) is not None else ''
-                video_title = video.find('ns:title', NAMESPACE).text if video.find('ns:title', NAMESPACE) is not None else ''
-                video_data.append({'loc': video_loc, 'title': video_title})
-            
-            news = url_elem.findall('ns:news', NAMESPACE)
-            news_data = []
-            for news_item in news:
-                news_publication_date = news_item.find('ns:publication_date', NAMESPACE).text if news_item.find('ns:publication_date', NAMESPACE) is not None else ''
-                news_title = news_item.find('ns:title', NAMESPACE).text if news_item.find('ns:title', NAMESPACE) is not None else ''
-                news_data.append({'publication_date': news_publication_date, 'title': news_title})
-            
-            urls.append({
-                'sitemap_name': sitemap_name,
-                'loc': loc,
-                'lastmod': lastmod,
-                'changefreq': changefreq,
-                'priority': priority,
-                'images': image_data,
-                'videos': video_data,
-                'news': news_data
-            })
+        console.log(f"[blue]Parsing {url_count} URLs in sitemap...[/blue]")
+        with Progress(BarColumn(), "[progress.percentage]{task.percentage:>3.1f}%", TimeRemainingColumn(), console=console) as progress_bar:
+            task = progress_bar.add_task("[cyan]Parsing URLs...", total=url_count)
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                futures = {executor.submit(parse_url_element, url_elem, sitemap_name): url_elem for url_elem in root.findall('ns:url', NAMESPACE)}
+                for future in as_completed(futures):
+                    result = future.result()
+                    if result:
+                        urls.append(result)
+                        progress_bar.update(task, advance=1)
 
 @click.command()
 def site_mapper():
     """Download and parse sitemaps, export URLs to CSV."""
-    sitemap_url = click.prompt(click.style("Enter the URL of the sitemap (supports .xml and .gz)", fg="cyan", bold=True))
-    output_file = click.prompt(click.style("Enter the path to the output CSV file", fg="cyan", bold=True), type=click.Path())
+    global progress, output_file
     
-    urls = []
-    click.echo(click.style("Downloading and parsing sitemap...", fg="green", bold=True))
+    sitemap_url = click.prompt(click.style("Enter the URL of the sitemap (supports .xml and .gz)", fg="cyan", bold=True))
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    default_filename = f"sitemap_output_{timestamp}.csv"
+    output_file = click.prompt(click.style(f"Enter the path to the output CSV file (leave blank for default: {default_filename})", fg="cyan", bold=True), default=default_filename, show_default=True)
+    
+    urls = load_progress(output_file)
+    if urls:
+        console.log("[yellow]Resuming from previous progress...[/yellow]")
+    else:
+        console.log("[green]Starting new sitemap parsing...[/green]")
+    
+    console.log("[green]Downloading and parsing sitemap...[/green]")
     root = download_sitemap(sitemap_url)
     if root:
-        parse_sitemap(root, urls, sitemap_url)
+        progress = {'urls': urls}
+        parse_sitemap(root, urls, sitemap_url, output_file=output_file)
         df = pd.DataFrame(urls)
         df.to_csv(output_file, index=False)
-        click.echo(click.style(f"Sitemap data saved to {output_file}", fg="green", bold=True))
+        if os.path.exists(output_file + ".temp"):
+            os.remove(output_file + ".temp")
+        console.log(f"[green]Sitemap data saved to {output_file}[/green]")
     else:
-        click.echo(click.style("Failed to process sitemap.", fg="red", bold=True))
+        console.log("[bold red]Failed to process sitemap.[/bold red]")
 
 if __name__ == "__main__":
     site_mapper()
