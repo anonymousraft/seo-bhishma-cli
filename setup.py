@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='seo-bhishma-cli',
-    version='1.0',
+    version='1.1',
     author='Hitendra Rathore',
     author_email='hitendra1995@mail.com',
     description='A CLI tool for SEO tasks',
