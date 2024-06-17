@@ -7,6 +7,8 @@ from tqdm import tqdm
 from itertools import cycle
 from bs4 import BeautifulSoup
 from datetime import datetime
+import signal
+import sys
 
 # Load user agents from a file
 def load_user_agents(user_agent_file):
@@ -20,45 +22,26 @@ def load_proxies(proxy_file):
         proxies = f.read().splitlines()
     return proxies
 
-# Validate proxy by making a simple request
-def validate_proxy(proxy, user_agent):
-    proxies = {
-        'http': f"http://{proxy}",
-        'https': f"https://{proxy}"
-    }
-    headers = {'User-Agent': user_agent}
-    test_url = "https://www.google.com"
-    try:
-        response = requests.get(test_url, headers=headers, proxies=proxies, timeout=10)
-        if response.status_code == 200 and "captcha" not in response.text.lower():
-            return proxies
-    except Exception:
-        pass
-    
-    # Try only HTTP
-    proxies = {
-        'http': f"http://{proxy}"
-    }
-    try:
-        response = requests.get(test_url, headers=headers, proxies=proxies, timeout=10)
-        if response.status_code == 200 and "captcha" not in response.text.lower():
-            return proxies
-    except Exception:
-        pass
-    
-    # Try only HTTPS
-    proxies = {
-        'https': f"https://{proxy}"
-    }
-    try:
-        response = requests.get(test_url, headers=headers, proxies=proxies, timeout=10)
-        if response.status_code == 200 and "captcha" not in response.text.lower():
-            return proxies
-    except Exception:
-        return None
+# Validate proxy and user agent by making a search request
+def validate_proxy_and_user_agent(proxy, user_agent, url, proxy_mode):
+    headers = {'User-Agent': user_agent} if user_agent else {}
+    for protocol in proxy_mode:
+        proxies = {protocol: f"{protocol}://{proxy}"}
+        try:
+            response = requests.get(url, headers=headers, proxies=proxies, timeout=10)
+            if response.status_code == 200 and "captcha" not in response.text.lower():
+                return proxies
+            elif response.status_code == 429:
+                click.echo(click.style(f"Proxy {proxy} returned 429 Too Many Requests. Applying delay...", fg="red"))
+                time.sleep(60)  # Apply a delay if 429 is encountered
+            else:
+                click.echo(click.style(f"Proxy {proxy} returned status code {response.status_code}", fg="red"))
+        except requests.RequestException as e:
+            click.echo(click.style(f"Proxy {proxy} failed with error: {e}", fg="red"))
+    return None
 
 # Check indexing status using a proxy and user-agent
-def check_indexing_status(url, proxies=None, user_agent=None):
+def check_indexing_status(url, proxies=None, user_agent=None, captcha_service=None, captcha_key=None, rate_limit=0):
     query = f"site:{url}"
     headers = {'User-Agent': user_agent} if user_agent else {}
     search_url = f"https://www.google.com/search?q={query}"
@@ -66,19 +49,123 @@ def check_indexing_status(url, proxies=None, user_agent=None):
     try:
         response = requests.get(search_url, headers=headers, proxies=proxies, timeout=10)
         if "captcha" in response.text.lower():
+            if captcha_service and captcha_key:
+                site_key = get_site_key(search_url)
+                if site_key:
+                    captcha_solution = solve_captcha(captcha_service, captcha_key, search_url, site_key)
+                    if captcha_solution:
+                        headers['g-recaptcha-response'] = captcha_solution
+                        response = requests.get(search_url, headers=headers, proxies=proxies, timeout=10)
+                        if "captcha" not in response.text.lower():
+                            return parse_indexing_status(response)
             return "Captcha Encountered"
         
-        soup = BeautifulSoup(response.text, 'html.parser')
-        results = soup.find_all('div', class_='g')
-        
-        if results:
-            return "Indexed"
-        else:
-            return "Not Indexed"
+        return parse_indexing_status(response)
     except Exception as e:
         return f"Error: {e}"
+    finally:
+        if rate_limit > 0:
+            click.echo(click.style(f"Applying rate limit: Waiting for {rate_limit} seconds...", fg="yellow"))
+            time.sleep(rate_limit)
 
-# Read input file (CSV or JSON)
+def parse_indexing_status(response):
+    soup = BeautifulSoup(response.text, 'html.parser')
+    results = soup.find_all('div', class_='g')
+    
+    if results:
+        return "Indexed"
+    else:
+        return "Not Indexed"
+
+def get_site_key(url):
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    recaptcha_tag = soup.find('div', {'class': 'g-recaptcha'})
+    if recaptcha_tag and 'data-sitekey' in recaptcha_tag.attrs:
+        return recaptcha_tag['data-sitekey']
+    return None
+
+def solve_captcha_2captcha(api_key, google_search_url, site_key):
+    captcha_request_url = "http://2captcha.com/in.php"
+    captcha_response_url = "http://2captcha.com/res.php"
+    payload = {
+        'key': api_key,
+        'method': 'userrecaptcha',
+        'googlekey': site_key,
+        'pageurl': google_search_url
+    }
+    response = requests.post(captcha_request_url, data=payload)
+    
+    if response.status_code != 200:
+        raise Exception("Failed to send captcha solving request")
+
+    response_text = response.text.split('|')
+    if response_text[0] != 'OK':
+        raise Exception(f"Error from 2Captcha: {response.text}")
+    
+    request_id = response_text[1]
+    
+    solution_payload = {
+        'key': api_key,
+        'action': 'get',
+        'id': request_id
+    }
+    while True:
+        solution_response = requests.get(captcha_response_url, params=solution_payload)
+        solution_response_text = solution_response.text.split('|')
+        if solution_response_text[0] == 'CAPCHA_NOT_READY':
+            time.sleep(5)
+            continue
+        elif solution_response_text[0] == 'OK':
+            return solution_response_text[1]
+        else:
+            raise Exception(f"Error solving captcha: {solution_response.text}")
+
+def solve_captcha_anticaptcha(api_key, google_search_url, site_key):
+    create_task_url = "https://api.anti-captcha.com/createTask"
+    get_task_result_url = "https://api.anti-captcha.com/getTaskResult"
+    
+    task_payload = {
+        "clientKey": api_key,
+        "task": {
+            "type": "NoCaptchaTaskProxyless",
+            "websiteURL": google_search_url,
+            "websiteKey": site_key
+        }
+    }
+    response = requests.post(create_task_url, json=task_payload)
+    
+    if response.status_code != 200:
+        raise Exception("Failed to send captcha solving request")
+
+    response_json = response.json()
+    if response_json.get('errorId') != 0:
+        raise Exception(f"Error from Anti-Captcha: {response_json.get('errorDescription')}")
+
+    task_id = response_json.get('taskId')
+    
+    solution_payload = {
+        "clientKey": api_key,
+        "taskId": task_id
+    }
+    while True:
+        solution_response = requests.post(get_task_result_url, json=solution_payload)
+        result = solution_response.json()
+        if result['status'] == 'processing':
+            time.sleep(5)
+            continue
+        elif result['status'] == 'ready':
+            return result['solution']['gRecaptchaResponse']
+        else:
+            raise Exception(f"Error solving captcha: {result.get('errorDescription')}")
+
+def solve_captcha(captcha_service, captcha_key, url, site_key):
+    if captcha_service.lower() == '2captcha':
+        return solve_captcha_2captcha(captcha_key, url, site_key)
+    elif captcha_service.lower() == 'anti-captcha':
+        return solve_captcha_anticaptcha(captcha_key, url, site_key)
+    return None
+
 def read_input_file(file_path):
     if file_path.endswith('.csv'):
         return pd.read_csv(file_path)
@@ -87,19 +174,46 @@ def read_input_file(file_path):
     else:
         raise ValueError("Unsupported file format. Use CSV or JSON.")
 
-# Index Spy CLI command
+def save_progress(results, output_file):
+    df = pd.DataFrame(results)
+    df.to_csv(output_file, index=False)
+    click.echo(click.style(f"Progress saved to {output_file}", fg="green", bold=True))
+
+def signal_handler(sig, frame):
+    click.echo(click.style("\nProcess interrupted! Saving progress...", fg="red", bold=True))
+    save_progress(results, output_file)
+    sys.exit(0)
+
 @click.command()
 @click.pass_context
 def index_spy(ctx):
     """Check if URLs are indexed by Google."""
+    global results, output_file
+
     use_proxy = click.confirm("Do you want to use proxies?", default=False)
     proxy_file = None
     proxies = None
     valid_proxies = None
     current_proxy = None
+    proxy_mode = ['http', 'https']
     if use_proxy:
         proxy_file = click.prompt("Enter the path to the proxy file", type=click.Path(exists=True))
         proxies = cycle(load_proxies(proxy_file))
+        proxy_mode_choice = click.prompt(
+            "Select proxy mode",
+            type=click.Choice(['HTTP', 'HTTPS', 'Both', 'SOCKS4', 'SOCKS5'], case_sensitive=False),
+            default='Both'
+        )
+        if proxy_mode_choice.lower() == 'http':
+            proxy_mode = ['http']
+        elif proxy_mode_choice.lower() == 'https':
+            proxy_mode = ['https']
+        elif proxy_mode_choice.lower() == 'both':
+            proxy_mode = ['http', 'https']
+        elif proxy_mode_choice.lower() == 'socks4':
+            proxy_mode = ['socks4']
+        elif proxy_mode_choice.lower() == 'socks5':
+            proxy_mode = ['socks5']
         
     use_user_agent = click.confirm("Do you want to randomize user agents?", default=False)
     user_agents = None
@@ -108,6 +222,18 @@ def index_spy(ctx):
         user_agent_file = click.prompt("Enter the path to the user agent file", type=click.Path(exists=True))
         user_agents = load_user_agents(user_agent_file)
     
+    use_captcha_service = click.confirm("Do you want to use a paid captcha solving service?", default=False)
+    captcha_service = None
+    captcha_key = None
+    if use_captcha_service:
+        captcha_service = click.prompt("Enter the captcha service (2Captcha or Anti-Captcha)", type=str, default='2Captcha')
+        captcha_key = click.prompt("Enter your captcha service API key", type=str)
+
+    rate_limit = click.prompt("Enter the delay between requests in seconds (0 for no delay)", type=int, default=0)
+
+    validated = False
+    signal.signal(signal.SIGINT, signal_handler)
+
     while True:
         click.echo("\n" + "="*50)
         click.echo(click.style("IndexSpy - Bulk Indexing Checker", fg="yellow", bold=True))
@@ -118,23 +244,22 @@ def index_spy(ctx):
 
         if choice == 1:
             url = click.prompt(click.style("Enter the URL to check indexing status", fg="cyan"))
-            if use_proxy:
-                while True:
-                    proxy = next(proxies)
-                    valid_proxies = validate_proxy(proxy, random.choice(user_agents) if user_agents else None)
+            if use_proxy or use_user_agent:
+                while not validated:
+                    proxy = next(proxies) if use_proxy else None
+                    user_agent = random.choice(user_agents) if use_user_agent else None
+                    valid_proxies = validate_proxy_and_user_agent(proxy, user_agent, f"https://www.google.com/search?q=site:{url}", proxy_mode)
                     if valid_proxies:
                         current_proxy = proxy
+                        current_user_agent = user_agent
                         click.echo(click.style(f"Using Proxy: {current_proxy}", fg="blue"))
-                        break
+                        if use_user_agent:
+                            click.echo(click.style(f"Using User-Agent: {current_user_agent}", fg="blue"))
+                        validated = True
                     else:
-                        click.echo(click.style(f"Proxy {proxy} is not valid. Skipping.", fg="red"))
-            
-            user_agent = random.choice(user_agents) if use_user_agent else None
-            if user_agent != current_user_agent:
-                current_user_agent = user_agent
-                click.echo(click.style(f"Using User-Agent: {current_user_agent}", fg="blue"))
+                        click.echo(click.style(f"Proxy {proxy} is not valid. Retrying...", fg="red"))
 
-            status = check_indexing_status(url, valid_proxies, current_user_agent)
+            status = check_indexing_status(url, valid_proxies, current_user_agent, captcha_service, captcha_key, rate_limit)
             click.echo(click.style(f"URL: {url}", fg="cyan"))
             click.echo(click.style(f"Indexing Status: {status}", fg="green" if status == "Indexed" else "red"))
         
@@ -146,51 +271,79 @@ def index_spy(ctx):
             data = read_input_file(input_file)
             results = []
             
-            if use_proxy:
-                while True:
-                    proxy = next(proxies)
-                    valid_proxies = validate_proxy(proxy, random.choice(user_agents) if user_agents else None)
-                    if valid_proxies:
-                        current_proxy = proxy
-                        click.echo(click.style(f"Using Proxy: {current_proxy}", fg="blue"))
-                        break
-                    else:
-                        click.echo(click.style(f"Proxy {proxy} is not valid. Skipping.", fg="red"))
+            click.echo(click.style("Starting URL processing...", fg="green", bold=True))
 
-            click.echo(click.style("Checking indexing status for URLs...", fg="green", bold=True))
-            
-            index = 0
-            while index < len(data):
+            proxy_failure_count = 0
+            captcha_failure_count = 0
+
+            for index in tqdm(range(len(data)), desc="Processing URLs"):
                 url = data.loc[index, 'url']
-                user_agent = random.choice(user_agents) if use_user_agent and user_agents else None
-                if user_agent != current_user_agent:
-                    current_user_agent = user_agent
-                    click.echo(click.style(f"Using User-Agent: {current_user_agent}", fg="blue"))
-                
-                status = check_indexing_status(url, valid_proxies, current_user_agent)
-                if "Captcha Encountered" in status:
-                    click.echo(click.style("Captcha encountered! Rotating proxy and user agent.", fg="red"))
-                    time.sleep(2)  # Wait a bit before retrying to avoid continuous captchas
+                if use_proxy or use_user_agent:
+                    retries = 0
+                    while not validated and retries < 5:
+                        proxy = next(proxies) if use_proxy else None
+                        user_agent = random.choice(user_agents) if use_user_agent else None
+                        valid_proxies = validate_proxy_and_user_agent(proxy, user_agent, f"https://www.google.com/search?q=site:{url}", proxy_mode)
+                        if valid_proxies:
+                            current_proxy = proxy
+                            current_user_agent = user_agent
+                            click.echo(click.style(f"Using Proxy: {current_proxy}", fg="blue"))
+                            if use_user_agent:
+                                click.echo(click.style(f"Using User-Agent: {current_user_agent}", fg="blue"))
+                            validated = True
+                        else:
+                            click.echo(click.style(f"Proxy {proxy} is not valid. Retrying...", fg="red"))
+                            retries += 1
+                    if retries >= 5:
+                        click.echo(click.style("Too many retries with proxies and user agents. Saving progress and aborting...", fg="red", bold=True))
+                        save_progress(results, output_file)
+                        return
 
-                    # Rotate proxy and user agent until a valid one is found
-                    while True:
-                        if use_proxy:
+                status = check_indexing_status(url, valid_proxies, current_user_agent, captcha_service, captcha_key, rate_limit)
+                
+                if "Captcha Encountered" in status:
+                    captcha_failure_count += 1
+                    if use_user_agent:
+                        click.echo(click.style("Captcha encountered! Changing user agent.", fg="red"))
+                        time.sleep(2)
+                        current_user_agent = random.choice(user_agents)
+                        click.echo(click.style(f"Using User-Agent: {current_user_agent}", fg="blue"))
+                        status = check_indexing_status(url, valid_proxies, current_user_agent, captcha_service, captcha_key, rate_limit)
+                    if "Captcha Encountered" in status and use_proxy:
+                        click.echo(click.style("Captcha encountered again! Changing proxy and user agent.", fg="red"))
+                        time.sleep(2)
+                        validated = False
+                        retries = 0
+                        while not validated and retries < 5:
                             proxy = next(proxies)
-                            valid_proxies = validate_proxy(proxy, random.choice(user_agents) if user_agents else None)
+                            user_agent = random.choice(user_agents) if user_agents else None
+                            valid_proxies = validate_proxy_and_user_agent(proxy, user_agent, f"https://www.google.com/search?q=site:{url}", proxy_mode)
                             if valid_proxies:
                                 current_proxy = proxy
+                                current_user_agent = user_agent
                                 click.echo(click.style(f"Using Proxy: {current_proxy}", fg="blue"))
-                                break
+                                if use_user_agent:
+                                    click.echo(click.style(f"Using User-Agent: {current_user_agent}", fg="blue"))
+                                validated = True
                             else:
-                                click.echo(click.style(f"Proxy {proxy} is not valid. Skipping.", fg="red"))
+                                click.echo(click.style(f"Proxy {proxy} is not valid. Retrying...", fg="red"))
+                                retries += 1
+                            if retries >= 5:
+                                click.echo(click.style("Too many retries with proxies and user agents. Saving progress and aborting...", fg="red", bold=True))
+                                save_progress(results, output_file)
+                                return
 
-                        user_agent = random.choice(user_agents) if use_user_agent and user_agents else None
-                        if user_agent != current_user_agent:
-                            current_user_agent = user_agent
-                            click.echo(click.style(f"Using User-Agent: {current_user_agent}", fg="blue"))
-
-                    # Re-check the current URL with new proxy and user agent
-                    continue  # Continue with the same index after rotating proxy and user agent
+                        status = check_indexing_status(url, valid_proxies, current_user_agent, captcha_service, captcha_key, rate_limit)
+                    
+                if captcha_failure_count >= 3 and not use_proxy:
+                    click.echo(click.style("Too many captcha encounters. Waiting for 5 minutes...", fg="red"))
+                    time.sleep(300)
+                    captcha_failure_count = 0
+                    status = check_indexing_status(url, valid_proxies, current_user_agent, captcha_service, captcha_key, rate_limit)
+                    if "Captcha Encountered" in status:
+                        click.echo(click.style("Captcha issue persists. Saving progress and exiting...", fg="red"))
+                        save_progress(results, output_file)
+                        return
 
                 results.append({
                     'url': url,
@@ -198,11 +351,8 @@ def index_spy(ctx):
                     'proxy': current_proxy,
                     'user_agent': current_user_agent
                 })
-                index += 1  # Move to the next URL only if no captcha was encountered
 
-            df = pd.DataFrame(results)
-            df.to_csv(output_file, index=False)
-            click.echo(click.style(f"Indexing status saved to {output_file}", fg="green", bold=True))
+            save_progress(results, output_file)
         
         elif choice == 3:
             click.echo(click.style("Exiting IndexSpy. Goodbye!", fg="red", bold=True))
