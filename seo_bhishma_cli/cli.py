@@ -1,52 +1,63 @@
 import click
 from art import text2art
+from rich.console import Console
+from rich.prompt import Prompt
+from rich.table import Table
 from seo_bhishma_cli import link_sniper, site_mapper, index_spy, sitemap_generator, keyword_sorcerer
 from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
+
+console = Console()
 
 @click.group(invoke_without_command=True)
 @click.version_option(version=CLI_VERSION, prog_name=CLI_NAME)
 @click.pass_context
 def cli(ctx):
-    ascii_art = text2art(CLI_NAME)
-    click.echo("\n" + "="*50 + "\n")
-    click.echo(click.style(ascii_art, fg="cyan", bold=True))
-    click.echo(click.style(f"Welcome to {CLI_NAME}!", fg="green", bold=True))
-    click.echo(click.style(f"Version: {CLI_VERSION}", fg="green"))
-    click.echo(click.style(f"Author: {CLI_AUTHOR}\n", fg="green"))
+    try:
+        ascii_art = text2art(CLI_NAME, font='small')
+        console.print(f"[bold bright_cyan]{ascii_art}[/bold bright_cyan]")
+        console.print(f"[bold green]Welcome to {CLI_NAME}![/bold green]")
+        console.print(f"[green]Version: {CLI_VERSION}[/green]")
+        console.print(f"[green]Author: {CLI_AUTHOR}\n[/green]")
+        console.print(f"[dim white]This tool is my way of giving back to the community.[/dim white]")
+        console.print(f"[dim white]Support: [underline]https://buymeacoffee.com/rathorehitendra[/underline][/dim white]\n")
 
-    if ctx.invoked_subcommand is None:
-        ctx.invoke(menu)
+        if ctx.invoked_subcommand is None:
+            ctx.invoke(menu)
+    except Exception as e:
+        console.print(f"[bold red]An error occurred: {e}[/bold red]")
 
 @click.command()
 @click.pass_context
 def menu(ctx):
     while True:
-        click.echo(click.style("1. LinkSniper - Check Backlinks", fg="yellow"))
-        click.echo(click.style("2. SiteMapper - Download Sitemap", fg="yellow"))
-        click.echo(click.style("3. IndexSpy - Bulk Indexing Checker", fg="yellow"))
-        click.echo(click.style("4. Sitemap Generator - Generate sitemap from List of URls", fg="yellow"))
-        click.echo(click.style("5. Keyword Sorcerer - Keyword Clusteriser", fg="yellow"))
-        click.echo(click.style("0. Exit", fg="red", bold=True))
-        
-        choice = click.prompt(click.style("Enter your choice", fg="cyan", bold=True), type=int)
-        
-        if choice == 1:
-            ctx.invoke(link_sniper)
-        elif choice == 2:
-            ctx.invoke(site_mapper)
-        elif choice == 3:
-            ctx.invoke(index_spy)
-        elif choice == 4:
-            ctx.invoke(sitemap_generator)
-        elif choice == 5:
-            ctx.invoke(keyword_sorcerer)
-        elif choice == 0:
-            click.echo(click.style(f"Exiting {CLI_NAME}. Goodbye!", fg="red", bold=True))
-            break
-        else:
-            click.echo(click.style("Invalid choice. Please select a valid option.", fg="red"))
+        try:
+            table = Table(show_header=False, box=None)
+            table.add_row("[bold magenta]1.[/bold magenta]", "[yellow]LinkSniper - Check Backlinks[/yellow]")
+            table.add_row("[bold magenta]2.[/bold magenta]", "[yellow]SiteMapper - Download Sitemap[/yellow]")
+            table.add_row("[bold magenta]3.[/bold magenta]", "[yellow]IndexSpy - Bulk Indexing Checker[/yellow]")
+            table.add_row("[bold magenta]4.[/bold magenta]", "[yellow]Sitemap Generator - Generate sitemap from List of URLs[/yellow]")
+            table.add_row("[bold magenta]5.[/bold magenta]", "[yellow]Keyword Sorcerer - Keyword Clusteriser[/yellow]")
+            table.add_row("[bold red]0.[/bold red]", "[red]Exit[/red]")
+            
+            console.print(table)
 
-        click.echo("\n" + "="*50 + "\n")
+            choice = Prompt.ask("[bold cyan]Enter your choice[/bold cyan]", choices=["1", "2", "3", "4", "5", "0"])
+
+            if choice == "1":
+                ctx.invoke(link_sniper)
+            elif choice == "2":
+                ctx.invoke(site_mapper)
+            elif choice == "3":
+                ctx.invoke(index_spy)
+            elif choice == "4":
+                ctx.invoke(sitemap_generator)
+            elif choice == "5":
+                ctx.invoke(keyword_sorcerer)
+            elif choice == "0":
+                console.print(f"[bold red]Exiting {CLI_NAME}. Goodbye![/bold red]")
+                break
+        except Exception as e:
+            console.print(f"[bold red]An error occurred: {e}[/bold red]")
 
 cli.add_command(menu)
 cli.add_command(link_sniper)

@@ -1,6 +1,11 @@
 
 # SEO Bhishma CLI
 
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/anonymousraft/seo-bhishma-cli)
+![Python Version](https://img.shields.io/badge/python-3.7%20|%203.8-blue)
+![Forks](https://img.shields.io/github/forks/anonymousraft/seo-bhishma-cli?style=social)
+![Build Status](https://github.com/anonymousraft/seo-bhishma-cli/actions/workflows/python-publish.yml/badge.svg)
+
 SEO Bhishma CLI is a comprehensive CLI tool designed for various SEO-related tasks. It provides a suite of tools to help SEO professionals streamline & automate their workflow and improve website performance.
 
 ## Features
