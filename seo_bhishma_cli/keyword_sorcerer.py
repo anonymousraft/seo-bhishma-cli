@@ -4,14 +4,23 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN, SpectralClustering
 from sklearn.metrics import silhouette_score
-from tqdm import tqdm
 from datetime import datetime
 import os
 import numpy as np
 import time
 import yaml
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn
+from rich.prompt import Prompt
+import logging
+
+# Suppress detailed httpx logs
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 CONFIG_FILE = 'config.yaml'
+PROGRESS_FILE = 'progress.yaml'
+
+console = Console()
 
 # Function to load configuration
 def load_config():
@@ -26,6 +35,20 @@ def load_config():
 def save_config(config):
     with open(CONFIG_FILE, 'w') as file:
         yaml.safe_dump(config, file)
+
+# Function to save progress
+def save_progress(progress):
+    with open(PROGRESS_FILE, 'w') as file:
+        yaml.safe_dump(progress, file)
+
+# Function to load progress
+def load_progress():
+    if os.path.exists(PROGRESS_FILE):
+        with open(PROGRESS_FILE, 'r') as file:
+            progress = yaml.safe_load(file)
+    else:
+        progress = {}
+    return progress
 
 # Function to load keywords from CSV file
 def load_keywords(file_path):
@@ -56,22 +79,29 @@ def determine_cluster_names(keywords, labels):
 def generate_embeddings(keywords, api_key):
     client = OpenAI(api_key=api_key)
     embeddings = []
-    for keyword in tqdm(keywords, desc="Generating embeddings"):
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": f"Generate a descriptive sentence that captures the intent for the keyword: {keyword}"}
-                ],
-                max_tokens=50
-            )
-            embedding = response.choices[0].message.content.strip()
-            embeddings.append(embedding)
-            time.sleep(0.5)  # Rate limiting
-        except Exception as e:
-            print(f"Error generating embedding for '{keyword}': {e}")
-            embeddings.append('')
+    progress = load_progress()
+    start_index = progress.get('start_index', 0)
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), BarColumn(), TimeRemainingColumn()) as progress_bar:
+        task = progress_bar.add_task("[green]Generating embeddings", total=len(keywords) - start_index)
+        for i, keyword in enumerate(keywords[start_index:], start=start_index):
+            try:
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": f"Generate a descriptive sentence that captures the intent for the keyword: {keyword}"}
+                    ],
+                    max_tokens=50
+                )
+                embedding = response.choices[0].message.content.strip()
+                embeddings.append(embedding)
+                progress_bar.update(task, advance=1)
+                progress['start_index'] = i + 1
+                save_progress(progress)
+                time.sleep(0.5)  # Rate limiting
+            except Exception as e:
+                console.print(f"[red]Error generating embedding for '{keyword}': {e}")
+                embeddings.append('')
     return embeddings
 
 # Function to calculate the optimal number of clusters
@@ -119,7 +149,7 @@ def cluster_keywords_dbscan(embeddings):
     try:
         score = silhouette_score(X, labels)
     except ValueError as e:
-        print(f"Warning: {e}")
+        console.print(f"[yellow]Warning: {e}")
         score = None
     return labels, score
 
@@ -151,87 +181,87 @@ def keyword_sorcerer(ctx):
     config = load_config()
     
     while True:
-        click.echo("\n" + "="*50)
-        click.echo(click.style("Keyword Sorcerer", fg="yellow", bold=True))
-        click.echo(click.style("1. Cluster keywords with KMeans", fg="cyan"))
-        click.echo(click.style("2. Cluster keywords with Agglomerative Clustering", fg="cyan"))
-        click.echo(click.style("3. Cluster keywords with DBSCAN", fg="cyan"))
-        click.echo(click.style("4. Cluster keywords with Spectral Clustering", fg="cyan"))
-        click.echo(click.style("0. Exit", fg="red", bold=True))
-        choice = click.prompt(click.style("Enter your choice", fg="cyan", bold=True), type=int)
+        console.print("\n" + "="*50)
+        console.print("[yellow bold]Keyword Sorcerer")
+        console.print("[cyan]1. Cluster keywords with KMeans")
+        console.print("[cyan]2. Cluster keywords with Agglomerative Clustering")
+        console.print("[cyan]3. Cluster keywords with DBSCAN")
+        console.print("[cyan]4. Cluster keywords with Spectral Clustering")
+        console.print("[red bold]0. Exit")
+        choice = Prompt.ask("[cyan bold]Enter your choice", default="0")
 
-        if choice == 0:
-            click.echo(click.style("Exiting Keyword Sorcerer. Goodbye!", fg="red", bold=True))
+        if choice == "0":
+            console.print("[red bold]Exiting Keyword Sorcerer. Goodbye!")
             break
-        elif choice in [1, 2, 3, 4]:
-            input_file = click.prompt(click.style("Enter the path to the input CSV file", fg="cyan"), type=click.Path(exists=True))
-            output_file = click.prompt(click.style("Enter the path to the output CSV file", fg="cyan"), default=f"clusters_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", type=click.Path())
+        elif choice in ["1", "2", "3", "4"]:
+            input_file = Prompt.ask("[cyan]Enter the path to the input CSV file", default="keywords.csv")
+            output_file = Prompt.ask("[cyan]Enter the path to the output CSV file", default=f"clusters_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
             
             if 'api_key' not in config:
-                api_key = click.prompt(click.style("Enter your OpenAI API key", fg="cyan"), hide_input=True)
+                api_key = Prompt.ask("[cyan]Enter your OpenAI API key", password=True)
                 config['api_key'] = api_key
                 save_config(config)
             else:
                 api_key = config['api_key']
 
-            click.echo(click.style("Loading keywords...", fg="green", bold=True))
+            console.print("[green bold]Loading keywords...")
             try:
                 df = load_keywords(input_file)
             except Exception as e:
-                click.echo(click.style(f"Error loading keywords: {e}", fg="red"))
+                console.print(f"[red]Error loading keywords: {e}")
                 continue
 
             total_tokens = estimate_token_usage(df['keywords'].tolist())
             estimated_cost = (total_tokens / 1000) * 0.02  # Assuming $0.02 per 1000 tokens
-            click.echo(click.style(f"Estimated token usage: {total_tokens}", fg="green"))
-            click.echo(click.style(f"Estimated cost: ${estimated_cost:.4f}", fg="green"))
+            console.print(f"[green]Estimated token usage: {total_tokens}")
+            console.print(f"[green]Estimated cost: ${estimated_cost:.4f}")
 
-            proceed = click.confirm(click.style("Do you want to proceed?", fg="cyan"))
-            if not proceed:
-                click.echo(click.style("Operation cancelled by user.", fg="red"))
+            proceed = Prompt.ask("[cyan]Do you want to proceed?", default="no")
+            if proceed.lower() != "yes":
+                console.print("[red]Operation cancelled by user.")
                 continue
 
-            click.echo(click.style("Generating embeddings...", fg="green", bold=True))
+            console.print("[green bold]Generating embeddings...")
             try:
                 embeddings = generate_embeddings(df['keywords'].tolist(), api_key)
                 if not any(embeddings):
                     raise ValueError("All embeddings are empty. Check the input data or OpenAI responses.")
             except Exception as e:
-                click.echo(click.style(f"Error generating embeddings: {e}", fg="red"))
+                console.print(f"[red]Error generating embeddings: {e}")
                 continue
 
             min_clusters, max_clusters = calculate_optimal_clusters(len(df), min_keywords_per_cluster=4, max_keywords_per_cluster=8)
 
-            click.echo(click.style("Clustering keywords...", fg="green", bold=True))
+            console.print("[green bold]Clustering keywords...")
             try:
-                if choice == 1:
+                if choice == "1":
                     labels, score = cluster_keywords_kmeans(embeddings, min_clusters, max_clusters)
-                elif choice == 2:
+                elif choice == "2":
                     labels, score = cluster_keywords_agglomerative(embeddings, min_clusters, max_clusters)
-                elif choice == 3:
+                elif choice == "3":
                     labels, score = cluster_keywords_dbscan(embeddings)
-                elif choice == 4:
+                elif choice == "4":
                     labels, score = cluster_keywords_spectral(embeddings, min_clusters, max_clusters)
                 else:
-                    click.echo(click.style("Invalid choice. Please select a valid option.", fg="red"))
+                    console.print("[red]Invalid choice. Please select a valid option.")
                     continue
                 clusters = determine_cluster_names(df['keywords'], labels)
             except Exception as e:
-                click.echo(click.style(f"Error clustering keywords: {e}", fg="red"))
+                console.print(f"[red]Error clustering keywords: {e}")
                 continue
 
-            click.echo(click.style("Saving clustered keywords...", fg="green", bold=True))
+            console.print("[green bold]Saving clustered keywords...")
             try:
                 save_clusters_to_csv(df, labels, clusters, [score] * len(labels), output_file)
             except Exception as e:
-                click.echo(click.style(f"Error saving clustered keywords: {e}", fg="red"))
+                console.print(f"[red]Error saving clustered keywords: {e}")
                 continue
 
-            click.echo(click.style(f"Keyword clustering complete. {len(clusters)} clusters created for {len(df)} keywords.", fg="green", bold=True))
+            console.print(f"[green bold]Keyword clustering complete. {len(clusters)} clusters created for {len(df)} keywords.")
         else:
-            click.echo(click.style("Invalid choice. Please select a valid option.", fg="red"))
+            console.print("[red]Invalid choice. Please select a valid option.")
 
-        click.echo("\n" + "="*50 + "\n")
+        console.print("\n" + "="*50 + "\n")
 
 if __name__ == '__main__':
     keyword_sorcerer()

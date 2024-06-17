@@ -3,6 +3,7 @@
 config.yaml
 .csv
 .xml
+progress.yaml
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
