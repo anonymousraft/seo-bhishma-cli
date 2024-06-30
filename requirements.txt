@@ -10,3 +10,6 @@ scikit-learn
 openai
 pyyaml
 rich
+google-auth
+google-auth-oauthlib
+google-api-python-client

@@ -4,6 +4,9 @@ config.yaml
 *.csv
 *.xml
 progress.yaml
+*.csv#
+gsc_data/
+*.pickle
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

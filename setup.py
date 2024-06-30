@@ -23,7 +23,10 @@ setup(
         'scikit-learn',
         'openai',
         'pyyaml',
-        'rich'
+        'rich',
+        'google-auth',
+        'google-auth-oauthlib',
+        'google-api-python-client'
     ],
     entry_points={
         'console_scripts': [
