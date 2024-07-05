@@ -3,7 +3,7 @@ from art import text2art
 from rich.console import Console
 from rich.prompt import Prompt
 from rich.table import Table
-from seo_bhishma_cli import link_sniper, site_mapper, index_spy, sitemap_generator, keyword_sorcerer, gsc_probe
+from seo_bhishma_cli import link_sniper, site_mapper, index_spy, sitemap_generator, keyword_sorcerer, gsc_probe, redirection_genius
 from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
 
 console = Console()
@@ -38,11 +38,12 @@ def menu(ctx):
             table.add_row("[bold magenta]4.[/bold magenta]", "[yellow]Sitemap Generator - Generate sitemap from List of URLs[/yellow]")
             table.add_row("[bold magenta]5.[/bold magenta]", "[yellow]Keyword Sorcerer - Keyword Clusteriser[/yellow]")
             table.add_row("[bold magenta]6.[/bold magenta]", "[yellow]GSC Probe - Extract GSC Data[/yellow]")
+            table.add_row("[bold magenta]7.[/bold magenta]", "[yellow]Redirection Genius - Powerful NLP based URL mapper[/yellow]")
             table.add_row("[bold red]0.[/bold red]", "[red]Exit[/red]")
             
             console.print(table)
 
-            choice = Prompt.ask("[bold cyan]Enter your choice[/bold cyan]", choices=["1", "2", "3", "4", "5", "6", "0"])
+            choice = Prompt.ask("[bold cyan]Enter your choice[/bold cyan]", choices=["1", "2", "3", "4", "5", "6", "7", "0"])
 
             if choice == "1":
                 ctx.invoke(link_sniper)
@@ -56,6 +57,8 @@ def menu(ctx):
                 ctx.invoke(keyword_sorcerer)
             elif choice == "6":
                 ctx.invoke(gsc_probe)
+            elif choice == "7":
+                ctx.invoke(redirection_genius)
             elif choice == "0":
                 console.print(f"[bold red]Exiting {CLI_NAME}. Goodbye![/bold red]")
                 break
@@ -69,6 +72,7 @@ cli.add_command(index_spy)
 cli.add_command(sitemap_generator)
 cli.add_command(keyword_sorcerer)
 cli.add_command(gsc_probe)
+cli.add_command(redirection_genius)
 
 if __name__ == "__main__":
     cli()

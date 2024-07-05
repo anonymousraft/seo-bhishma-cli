@@ -1,4 +1,13 @@
+from setuptools.command.install import install
 from setuptools import setup, find_packages
+import subprocess
+import os
+
+class PostInstallCommand(install):
+    def run(self):
+        install.run(self)
+        # Ensure the spaCy model is downloaded
+        subprocess.check_call([self.install_scripts, 'post_install.py'])
 
 setup(
     name='seo-bhishma-cli',
@@ -26,17 +35,23 @@ setup(
         'rich',
         'google-auth',
         'google-auth-oauthlib',
-        'google-api-python-client'
+        'google-api-python-client',
+        'numpy',
+        'spacy'
     ],
     entry_points={
         'console_scripts': [
             'seo-bhishma-cli=seo_bhishma_cli.cli:cli',
         ],
     },
+    cmdclass={
+        'install': PostInstallCommand,
+    },
+    scripts=['post_install.py'],
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
     ],
-    python_requires='>=3.6',
+    python_requires='>=3.6'
 )

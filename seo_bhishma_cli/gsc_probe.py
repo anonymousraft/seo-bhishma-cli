@@ -24,8 +24,7 @@ console = Console()
 
 SCOPES = [
     'https://www.googleapis.com/auth/webmasters.readonly',
-    'https://www.googleapis.com/auth/webmasters',
-    'https://www.googleapis.com/auth/urlinspection'
+    'https://www.googleapis.com/auth/webmasters'
 ]
 progress = None
 output_file = None
