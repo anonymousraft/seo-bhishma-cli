@@ -31,10 +31,10 @@ jobs:
         pip install build
 
     - name: Clean build directory
-      run: rm -rf build/
+      run: rm -rf build/ dist/
 
-    - name: Fix permissions
-      run: sudo chmod -R 777 build
+    - name: Create build directory with proper permissions
+      run: mkdir -p build && sudo chmod -R 777 build
 
     - name: Build package
       run: sudo python -m build
