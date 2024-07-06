@@ -11,7 +11,7 @@ class PostInstallCommand(install):
 
 setup(
     name='seo-bhishma-cli',
-    version='1.2.1',
+    version='1.3',
     author='Hitendra Rathore',
     author_email='hitendra1995@mail.com',
     description='A CLI tool for SEO tasks',
