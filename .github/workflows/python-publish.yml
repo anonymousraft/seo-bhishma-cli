@@ -33,11 +33,11 @@ jobs:
     - name: Clean build directory
       run: rm -rf build/ dist/
 
-    - name: Create build directory with proper permissions
-      run: mkdir -p build && sudo chmod -R 777 build
+    - name: Set umask to ensure proper permissions
+      run: umask 0000
 
     - name: Build package
-      run: sudo python -m build
+      run: python -m build
 
     - name: Publish package
       uses: pypa/gh-action-pypi-publish@27b31702a0e7fc50959f5ad993c78deac1bdfc29
