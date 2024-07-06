@@ -15,6 +15,9 @@ SEO Bhishma CLI is a comprehensive CLI tool designed for various SEO-related tas
 - **IndexSpy**: Bulk indexing checker with proxy options and user-agents. Now check unlimited URLs
 - **KeywordSorcerer**: GPT4 based keyword clusteriser with different methods
 - **Sitemap Generator**:Powerful sitemap generator from URL list. Generate nested, compressed sitemap hassle free.
+- **GSC Probe**: Extract unlimited GSC Performance data, sitemaps, inspect URLs in bulk.
+- **Redirect Genuis**: Powerful & intelligent redirect URL mapper. Uses NLP to get context of the URLs slugs and maps sources and destination URLs
+
 
 ## Installation
 
@@ -39,14 +42,28 @@ seo-bhishma-cli
 You will see the following menu:
 
 ```
-Welcome to SEO Bhishma CLI!
-Version: 1.0.0
+ ___  ___   ___    ___  _     _      _                 
+/ __|| __| / _ \  | _ )| |_  (_) ___| |_   _ __   __ _ 
+\__ \| _| | (_) | | _ \| ' \ | |(_-<| ' \ | '  \ / _` |
+|___/|___| \___/  |___/|_||_||_|/__/|_||_||_|_|_|\__,_|
+                                                       
+
+Welcome to SEO Bhishma!
+Version: 1.2.1
 Author: @hi7endra
 
-1. LinkSniper - Check Backlinks
-2. SiteMapper - Download Sitemap
-3. IndexSpy - Bulk Indexing Checker
-4. Exit
+This tool is my way of giving back to the community.
+Support: https://buymeacoffee.com/rathorehitendra
+
+ 1.  LinkSniper - Check Backlinks                           
+ 2.  SiteMapper - Download Sitemap                          
+ 3.  IndexSpy - Bulk Indexing Checker                       
+ 4.  Sitemap Generator - Generate sitemap from List of URLs 
+ 5.  Keyword Sorcerer - Keyword Clusteriser                 
+ 6.  GSC Probe - Extract GSC Data                           
+ 7.  Redirection Genius - Powerful NLP based URL mapper     
+ 0.  Exit                                                   
+Enter your choice [1/2/3/4/5/6/7/0]:                                       
 ```
 
 Select an option by entering the corresponding number.
