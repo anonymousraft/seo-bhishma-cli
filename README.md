@@ -21,7 +21,36 @@ SEO Bhishma CLI is a comprehensive CLI tool designed for various SEO-related tas
 
 ## Installation
 
-You can install the package via pip:
+### Linux and macOS
+
+1. Open your terminal.
+2. Install the package using `pipx`:
+   ```sh
+   pip install pipx
+   pipx ensurepath
+   pipx install seo-bhishma-cli
+   ```
+
+### Windows
+
+1. Open PowerShell or terminal.
+2. Install Scoop:
+   ```sh
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+   Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+   ```
+3. Install `pipx` using Scoop:
+   ```sh
+   scoop install pipx
+   ```
+4. Install the package using `pipx`:
+   ```sh
+   pipx install seo-bhishma-cli
+   ```
+
+
+You can also install the package via pip:
 
 ```bash
 pip install seo-bhishma-cli
