@@ -62,13 +62,13 @@ def authenticate_gsc(creds_path=None):
 
 def save_progress(data, output_file):
     temp_file = output_file + ".temp"
-    with open(temp_file, 'w') as f:
+    with open(temp_file, 'w', encoding='utf-8') as f:
         json.dump(data, f)
 
 def load_progress(output_file):
     temp_file = output_file + ".temp"
     if os.path.exists(temp_file):
-        with open(temp_file, 'r') as f:
+        with open(temp_file, 'r', encoding='utf-8') as f:
             return json.load(f)
     return []
 
@@ -88,7 +88,7 @@ def save_gsc_data(site_url, data, dimensions, data_type):
     if data_type == 'search_analytics':
         if 'rows' in data and data['rows']:
             keys = dimensions + [col for col in data['rows'][0].keys() if col != 'keys']
-            with open(filename, 'w', newline='') as output_file:
+            with open(filename, 'w', newline='', encoding='utf-8') as output_file:
                 dict_writer = csv.DictWriter(output_file, fieldnames=keys)
                 dict_writer.writeheader()
                 for row in data['rows']:
@@ -96,13 +96,13 @@ def save_gsc_data(site_url, data, dimensions, data_type):
                         row.update({dimension: value for dimension, value in zip(dimensions, row.pop('keys'))})
                     dict_writer.writerow(row)
     elif data_type == 'sitemaps':
-        with open(filename, 'w', newline='') as output_file:
+        with open(filename, 'w', newline='', encoding='utf-8') as output_file:
             dict_writer = csv.DictWriter(output_file, fieldnames=data[0].keys())
             dict_writer.writeheader()
             dict_writer.writerows(data)
     else:
         keys = data['rows'][0].keys() if 'rows' in data else data.keys()
-        with open(filename, 'w', newline='') as output_file:
+        with open(filename, 'w', newline='', encoding='utf-8') as output_file:
             dict_writer = csv.DictWriter(output_file, fieldnames=keys)
             dict_writer.writeheader()
             if 'rows' in data:
@@ -290,7 +290,7 @@ def gsc_probe(ctx):
                     console.print("[red]No data fetched. Please check your query parameters and try again.[/red]")
                 else:
                     df = pd.DataFrame(data)
-                    df.to_csv(output_file, index=False)
+                    df.to_csv(output_file, index=False, encoding='utf-8')
                     if os.path.exists(output_file + ".temp"):
                         os.remove(output_file + ".temp")
                     console.log(f"[green]GSC data saved to {output_file}[/green]")
@@ -316,7 +316,7 @@ def gsc_probe(ctx):
                 elif url_inspect_type == 2:
                     csv_file_path = click.prompt(click.style("Enter the path to the CSV file containing URLs", fg="magenta"))
                     try:
-                        df = pd.read_csv(csv_file_path)
+                        df = pd.read_csv(csv_file_path, encoding='utf-8')
                         urls = df['urls'].tolist()
                         console.log("[green]Fetching URL inspection data...[/green]")
                         inspection_results = fetch_url_inspection(service, site_url, urls)
@@ -324,7 +324,7 @@ def gsc_probe(ctx):
                             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                             output_filename = f"gsc_data/url_inspection_output_{timestamp}.csv"
                             output_file = click.prompt(click.style(f"Enter the path to the output CSV file (leave blank for default: {output_filename})", fg="magenta"), default=output_filename, show_default=True)
-                            pd.DataFrame(inspection_results).to_csv(output_file, index=False)
+                            pd.DataFrame(inspection_results).to_csv(output_file, index=False, encoding='utf-8')
                             console.log(f"[green]URL inspection data saved to {output_file}[/green]")
                     except Exception as e:
                         console.print(f"[bold red]An error occurred while reading the CSV file: {e}[/bold red]")
@@ -336,4 +336,4 @@ def gsc_probe(ctx):
                 console.print("[red]Invalid choice! Please select a valid option.[/red]")
 
 if __name__ == "__main__":
-    gsc_probe()
+    gsc_probe()    
