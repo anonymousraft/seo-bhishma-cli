@@ -29,7 +29,7 @@ SEO Bhishma CLI is a comprehensive CLI tool designed for various SEO-related tas
    pip install pipx
    pipx ensurepath
    pipx install seo-bhishma-cli
-   ```
+   ```  
 
 ### Windows
 
