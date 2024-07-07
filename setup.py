@@ -1,13 +1,5 @@
 from setuptools.command.install import install
 from setuptools import setup, find_packages
-import subprocess
-import os
-
-class PostInstallCommand(install):
-    def run(self):
-        install.run(self)
-        # Ensure the spaCy model is downloaded
-        subprocess.check_call([self.install_scripts, 'post_install.py'])
 
 setup(
     name='seo-bhishma-cli',
@@ -44,10 +36,6 @@ setup(
             'seo-bhishma-cli=seo_bhishma_cli.cli:cli',
         ],
     },
-    cmdclass={
-        'install': PostInstallCommand,
-    },
-    scripts=['post_install.py'],
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: MIT License',
