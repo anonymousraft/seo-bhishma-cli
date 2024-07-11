@@ -4,7 +4,6 @@ beautifulsoup4
 pandas 
 art
 tqdm
-fake_useragent
 lxml
 scikit-learn
 openai
@@ -15,3 +14,9 @@ google-auth-oauthlib
 google-api-python-client
 numpy
 spacy
+dnspython
+ipwhois
+sublist3r
+python-whois
+geopy
+fake-useragent

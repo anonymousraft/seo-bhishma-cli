@@ -5,6 +5,7 @@ from .sitemap_generator import sitemap_generator
 from .keyword_sorcerer import keyword_sorcerer
 from .gsc_probe import gsc_probe
 from .redirection_genius import redirection_genius
+from .domain_insight import domain_insight
 
 __all__ = [
     'link_sniper',
@@ -13,5 +14,6 @@ __all__ = [
     'sitemap_generator',
     'keyword_sorcerer',
     'gsc_probe',
-    'redirection_genius'
+    'redirection_genius',
+    'domain_insight'
 ]

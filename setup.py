@@ -19,7 +19,6 @@ setup(
         'tqdm',
         'beautifulsoup4',
         'art',
-        'fake_useragent',
         'lxml',
         'scikit-learn',
         'openai',
@@ -29,7 +28,13 @@ setup(
         'google-auth-oauthlib',
         'google-api-python-client',
         'numpy',
-        'spacy'
+        'spacy',
+        'dnspython',
+        'ipwhois',
+        'sublist3r',
+        'python-whois',
+        'geopy',
+        'fake-useragent'
     ],
     entry_points={
         'console_scripts': [
