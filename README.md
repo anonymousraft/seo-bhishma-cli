@@ -17,7 +17,7 @@ SEO Bhishma CLI is a comprehensive CLI tool designed for various SEO-related tas
 - **Sitemap Generator**:Powerful sitemap generator from URL list. Generate nested, compressed sitemap hassle free.
 - **GSC Probe**: Extract unlimited GSC Performance data, sitemaps, inspect URLs in bulk.
 - **Redirect Genuis**: Powerful & intelligent redirect URL mapper. Uses NLP to get context of the URLs slugs and maps sources and destination URLs
-
+- **Domain Insights**: Advanced domain information gathering tool with features such as reverse IP lookup, WHOIS lookup, subdomain analysis, IP analysis, etc.
 
 ## Installation
 
@@ -78,7 +78,7 @@ You will see the following menu:
                                                        
 
 Welcome to SEO Bhishma!
-Version: 1.3.1
+Version: 1.4
 Author: @hi7endra
 
 This tool is my way of giving back to the community.
@@ -90,9 +90,10 @@ Support: https://buymeacoffee.com/rathorehitendra
  4.  Sitemap Generator - Generate sitemap from List of URLs 
  5.  Keyword Sorcerer - Keyword Clusteriser                 
  6.  GSC Probe - Extract GSC Data                           
- 7.  Redirection Genius - Powerful NLP based URL mapper     
+ 7.  Redirection Genius - Powerful NLP based URL mapper
+ 8.  Domain Insights - Domain Social Engineering Tool    
  0.  Exit                                                   
-Enter your choice [1/2/3/4/5/6/7/0]:                                       
+Enter your choice [1/2/3/4/5/6/7/8/0]:                                       
 ```
 
 Select an option by entering the corresponding number.
