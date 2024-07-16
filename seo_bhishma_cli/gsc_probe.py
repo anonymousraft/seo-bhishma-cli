@@ -14,7 +14,7 @@ from rich.logging import RichHandler
 import signal
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(message)s', handlers=[RichHandler()])
@@ -183,6 +183,19 @@ def fetch_url_inspection(service, site_url, url_list):
         console.print(f"[bold red]An error occurred: {e}[/bold red]")
         return None
 
+def get_available_dates(service, site_url):
+    try:
+        response = service.searchanalytics().query(siteUrl=site_url, body={'startDate': '2000-01-01', 'endDate': '2100-01-01', 'dimensions': ['date'], 'rowLimit': 1}).execute()
+        if 'rows' in response:
+            start_date = response['rows'][0]['keys'][0]
+            end_date = response['rows'][-1]['keys'][0]
+            return start_date, end_date
+        else:
+            return None, None
+    except Exception as e:
+        console.print(f"[bold red]An error occurred while fetching available dates: {e}[/bold red]")
+        return None, None
+
 @click.command()
 @click.pass_context
 def gsc_probe(ctx):
@@ -218,17 +231,24 @@ def gsc_probe(ctx):
         except ValueError as ve:
             console.print(f"[red]{ve}. Please enter a valid number.")
             continue
+
+        start_date, _ = get_available_dates(service, site_url)
+        end_date = (datetime.now(timezone.utc) - timedelta(days=3)).strftime('%Y-%m-%d')
+
+        if not start_date or not end_date:
+            console.print("[bold red]Unable to fetch available dates. Please check your site and try again.[/bold red]")
+            continue
         
-        available_dimensions = "query,page,country,device,searchAppearance"
+        available_dimensions = "date,query,page,country,device,searchAppearance"
 
         while True:
             console.print("\n[yellow]Select the type of data to extract:[/yellow]\n")
             data_type = click.prompt(click.style("1. Search Analytics\n2. Sitemaps\n3. URL Inspection\n4. Exit\nEnter the number of your choice", fg="magenta"), type=int)
 
             if data_type == 1:
-                start_date = click.prompt(click.style("Enter the start date (YYYY-MM-DD)", fg="magenta"))
-                end_date = click.prompt(click.style("Enter the end date (YYYY-MM-DD)", fg="magenta"))
-                dimensions = click.prompt(click.style(f"Enter the dimensions (comma-separated, available: {available_dimensions})", fg="magenta")).split(',')
+                start_date_input = click.prompt(click.style("Enter the start date (YYYY-MM-DD)", fg="magenta"), default=start_date, show_default=True)
+                end_date_input = click.prompt(click.style("Enter the end date (YYYY-MM-DD)", fg="magenta"), default=end_date, show_default=True)
+                dimensions = click.prompt(click.style(f"Enter the dimensions (comma-separated, available: {available_dimensions})", fg="magenta"), default="date", show_default=True).split(',')
                 search_type = click.prompt(click.style("Enter the search type (web/image/video/news)", fg="magenta"), default="web")
                 row_limit_input = click.prompt(click.style("Enter the row limit (leave blank for default: 25000, type 'max' for maximum available)", fg="magenta"), default="25000", show_default=True)
                 
@@ -247,8 +267,13 @@ def gsc_probe(ctx):
                     for dimension in dimensions:
                         apply_filter = click.prompt(click.style(f"Do you want to apply filter for dimension '{dimension}'? (yes/no)", fg="magenta"), default="yes", show_default=True)
                         if apply_filter.lower() == 'yes':
-                            filter_operator = click.prompt(click.style("Enter the filter operator (e.g., equals, contains, notContains, regex)", fg="magenta"), default="equals")
+                            filter_operator = click.prompt(click.style("Enter the filter operator (e.g., equals, contains, notContains, includingRegex, excludingRegex)", fg="magenta"), default="equals")
                             filter_expression = click.prompt(click.style("Enter the filter expression", fg="magenta"))
+                            if filter_operator in ["includingRegex", "excludingRegex"]:
+                                if filter_operator == "includingRegex":
+                                    filter_operator = "includingRegex"
+                                else:
+                                    filter_operator = "excludingRegex"
                             filters.append({
                                 'dimension': dimension,
                                 'operator': filter_operator,
@@ -256,7 +281,7 @@ def gsc_probe(ctx):
                             })
 
                 device_filter = click.prompt(click.style("Enter device filter (e.g., MOBILE, DESKTOP, TABLET) or leave blank for no filter", fg="magenta"), default="", show_default=True)
-                country_filter = click.prompt(click.style("Enter country filter (ISO 3166-1 alpha-2 code) or leave blank for no filter", fg="magenta"), default="", show_default=True)
+                country_filter = click.prompt(click.style("Enter country filter (ISO 3166-1 alpha-2 code, eg. IND for india) or leave blank for no filter", fg="magenta"), default="", show_default=True)
 
                 if device_filter:
                     filters.append({
@@ -283,7 +308,7 @@ def gsc_probe(ctx):
                     console.log("[green]Starting new GSC data extraction...[/green]")
                 
                 console.log("[green]Fetching GSC data...[/green]")
-                new_data = fetch_search_analytics(service, site_url, start_date, end_date, dimensions, row_limit, filters)
+                new_data = fetch_search_analytics(service, site_url, start_date_input, end_date_input, dimensions, row_limit, filters)
                 data.extend(new_data)
                 
                 if not data:
@@ -336,4 +361,4 @@ def gsc_probe(ctx):
                 console.print("[red]Invalid choice! Please select a valid option.[/red]")
 
 if __name__ == "__main__":
-    gsc_probe()    
+    gsc_probe()

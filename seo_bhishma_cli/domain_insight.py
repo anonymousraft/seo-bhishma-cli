@@ -25,7 +25,7 @@ current_domain = None
 def is_valid_domain_or_url(input_string):
     domain_regex = re.compile(
         r'^(?:http[s]?://)?(?:www\.)?'
-        r'(?P<domain>[a-zA-Z0-9-]{1,63}\.[a-zA-Z]{2,})'
+        r'(?P<domain>[a-zA-Z0-9-]{1,63}\.(?:[a-zA-Z]{2,}|[a-zA-Z]{2,3}\.[a-zA-Z]{2,3}))'
         r'(?::\d{1,5})?(?:[/?#]\S*)?$'
     )
     match = domain_regex.match(input_string)
@@ -309,6 +309,7 @@ def domain_insight(ctx):
                 if output_file:
                     console.print(f"[bold green]IP details saved to {output_file}[/bold green]")
             elif choice == 0:
+                current_domain = False
                 console.print("[bold red]Thank you for using Domain Insight![/bold red]")
                 break
             else:
