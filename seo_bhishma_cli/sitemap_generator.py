@@ -40,20 +40,20 @@ def generate_sitemap(urls, priority=None, frequency=None, lastmod=None):
 def write_sitemap(file_path, sitemap_content, compressed=False):
     try:
         if compressed:
-            with gzip.open(file_path, 'wb') as f:
+            with gzip.open(file_path, 'wb', encoding='utf-8') as f:
                 f.write(sitemap_content)
         else:
-            with open(file_path, 'wb') as f:
+            with open(file_path, 'wb', encoding='utf-8') as f:
                 f.write(sitemap_content)
     except Exception as e:
-        console.log(f"[bold red]Failed to write sitemap to file: {e}[/bold red]")
+        console.log(f"[bold red][-] Failed to write sitemap to file: {e}[/bold red]")
 
 # Read input CSV file
 def read_input_file(file_path):
     try:
         return pd.read_csv(file_path)['url'].tolist()
     except Exception as e:
-        console.log(f"[bold red]Failed to read input file: {e}[/bold red]")
+        console.log(f"[bold red][-] Failed to read input file: {e}[/bold red]")
         return []
 
 @click.command()
@@ -76,8 +76,8 @@ def sitemap_generator(ctx):
             output_dir = Prompt.ask("[cyan]Enter the output directory[/cyan]", default=os.getcwd())
             
             if not os.path.exists(output_dir):
-                console.print(f"[bold red]Output directory '{output_dir}' does not exist.[/bold red]")
-                console.print("[bold red]Please create the directory and try again.[/bold red]")
+                console.print(f"[bold red][-] Output directory '{output_dir}' does not exist.[/bold red]")
+                console.print("[bold red][-] Please create the directory and try again.[/bold red]")
                 continue
 
             nested = choice == "2"
@@ -93,7 +93,7 @@ def sitemap_generator(ctx):
 
             urls = read_input_file(input_file)
             if not urls:
-                console.print("[bold red]No URLs found in the input file.[/bold red]")
+                console.print("[bold red][-] No URLs found in the input file.[/bold red]")
                 continue
             
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -101,20 +101,20 @@ def sitemap_generator(ctx):
             try:
                 if not nested:
                     # Single sitemap
-                    console.print("Generating single sitemap...", style="bold green")
+                    console.print("[+] Generating single sitemap...", style="bold green")
                     sitemap_content = generate_sitemap(urls, priority if priority else None, frequency if frequency else None, lastmod)
                     file_name = f'sitemap_{timestamp}.xml'
                     file_path = os.path.join(output_dir, file_name)
                     if compressed:
                         file_path += '.gz'
                     write_sitemap(file_path, sitemap_content, compressed)
-                    console.print(f"Single sitemap saved to {file_path}", style="bold green")
+                    console.print(f"[+] Single sitemap saved to {file_path}", style="bold green")
                 else:
                     # Nested sitemaps
-                    console.print("Generating nested sitemaps...", style="bold green")
+                    console.print("[+] Generating nested sitemaps...", style="bold green")
                     sitemap_index = []
                     with Progress() as progress:
-                        task = progress.add_task("[green]Creating sitemaps...", total=(len(urls) // url_limit) + 1)
+                        task = progress.add_task("[green][+] Creating sitemaps...", total=(len(urls) // url_limit) + 1)
                         for i in range(0, len(urls), url_limit):
                             sitemap_urls = urls[i:i+url_limit]
                             sitemap_content = generate_sitemap(sitemap_urls, priority if priority else None, frequency if frequency else None, lastmod)
@@ -143,12 +143,12 @@ def sitemap_generator(ctx):
                     if compressed:
                         sitemap_index_path += '.gz'
                     write_sitemap(sitemap_index_path, sitemap_index_content, compressed)
-                    console.print(f"Sitemap index saved to {sitemap_index_path}", style="bold green")
-                    console.print(f"Total sitemaps created: {len(sitemap_index)}", style="bold green")
+                    console.print(f"[+] Sitemap index saved to {sitemap_index_path}", style="bold green")
+                    console.print(f"[+] Total sitemaps created: {len(sitemap_index)}", style="bold green")
             except Exception as e:
-                console.log(f"[bold red]An error occurred while generating the sitemaps: {e}[/bold red]")
+                console.log(f"[bold red][-] An error occurred while generating the sitemaps: {e}[/bold red]")
         else:
-            console.print("Invalid choice. Please select a valid option.", style="bold red")
+            console.print("[-] Invalid choice. Please select a valid option.", style="bold red")
 
         console.print("\n" + "="*50 + "\n", style="bold magenta")
 

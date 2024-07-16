@@ -30,7 +30,7 @@ progress = None
 output_file = None
 
 def signal_handler(sig, frame):
-    console.log("[bold yellow]Process interrupted! Progress has been saved.[/bold yellow]")
+    console.log("[bold yellow][/] Process interrupted! Progress has been saved.[/bold yellow]")
     if progress:
         save_progress(progress['data'], output_file)
     exit(0)
@@ -77,7 +77,7 @@ def fetch_site_list(service):
         site_list = service.sites().list().execute()
         return site_list
     except Exception as e:
-        console.print(f"[bold red]An error occurred: {e}[/bold red]")
+        console.print(f"[bold red][-] An error occurred: {e}[/bold red]")
         return None
 
 def save_gsc_data(site_url, data, dimensions, data_type):
@@ -127,7 +127,7 @@ def fetch_search_analytics(service, site_url, start_date, end_date, dimensions, 
     total_rows_fetched = 0
 
     with Progress(BarColumn(), "[progress.percentage]{task.percentage:>3.1f}%", TimeRemainingColumn(), console=console) as progress_bar:
-        task = progress_bar.add_task("[cyan]Fetching GSC data...", total=row_limit or 1000)
+        task = progress_bar.add_task("[cyan][+] Fetching GSC data...", total=row_limit or 1000)
         
         while True:
             try:
@@ -137,18 +137,18 @@ def fetch_search_analytics(service, site_url, start_date, end_date, dimensions, 
                     break
                 data.extend(rows)
                 total_rows_fetched += len(rows)
-                console.log(f"[green]{total_rows_fetched} rows fetched so far...[/green]")
+                console.log(f"[green][+] {total_rows_fetched} rows fetched so far...[/green]")
                 progress_bar.update(task, advance=len(rows))
                 request['startRow'] = len(data)  # Continue fetching rows
                 time.sleep(1)  # To respect rate limits
                 if row_limit and total_rows_fetched >= row_limit:
                     break
             except Exception as e:
-                console.print(f"[bold red]An error occurred: {e}[/bold red]")
+                console.print(f"[bold red][-] An error occurred: {e}[/bold red]")
                 break
 
     if not data:
-        console.print("[red]No data fetched. Please check your query parameters and try again.[/red]")
+        console.print("[red][-] No data fetched. Please check your query parameters and try again.[/red]")
     else:
         save_gsc_data(site_url, {'rows': data}, dimensions, 'search_analytics')
     return data
@@ -162,17 +162,17 @@ def fetch_sitemaps(service, site_url):
             save_gsc_data(site_url, sitemaps_data, ['sitemap'], 'sitemaps')
             return sitemaps_data
         else:
-            console.print("[red]No sitemaps found for this site.[/red]")
+            console.print("[red][-] No sitemaps found for this site.[/red]")
             return []
     except Exception as e:
-        console.print(f"[bold red]An error occurred: {e}[/bold red]")
+        console.print(f"[bold red][-] An error occurred: {e}[/bold red]")
         return None
 
 def fetch_url_inspection(service, site_url, url_list):
     try:
         batch_response = []
         with Progress(BarColumn(), "[progress.percentage]{task.percentage:>3.1f}%", TimeRemainingColumn(), console=console) as progress_bar:
-            task = progress_bar.add_task("[cyan]Inspecting URLs...", total=len(url_list))
+            task = progress_bar.add_task("[cyan][+] Inspecting URLs...", total=len(url_list))
             for url in url_list:
                 inspection_result = service.urlInspection().index().inspect(body={'inspectionUrl': url, 'siteUrl': site_url}).execute()
                 batch_response.append(inspection_result)
@@ -180,7 +180,7 @@ def fetch_url_inspection(service, site_url, url_list):
                 time.sleep(1)  # To respect rate limits
         return batch_response
     except Exception as e:
-        console.print(f"[bold red]An error occurred: {e}[/bold red]")
+        console.print(f"[bold red][-] An error occurred: {e}[/bold red]")
         return None
 
 def get_available_dates(service, site_url):
@@ -193,13 +193,13 @@ def get_available_dates(service, site_url):
         else:
             return None, None
     except Exception as e:
-        console.print(f"[bold red]An error occurred while fetching available dates: {e}[/bold red]")
+        console.print(f"[bold red][-] An error occurred while fetching available dates: {e}[/bold red]")
         return None, None
 
 @click.command()
 @click.pass_context
 def gsc_probe(ctx):
-    """Welcome to GSC Probe - Your Google Search Console Data Extraction Tool!"""
+    """Google Search Console Data Extraction Tool!"""
     creds_path = None
     while True:
         console.print("\n[bold blue]Welcome to GSC Probe![/bold blue]")
@@ -209,14 +209,14 @@ def gsc_probe(ctx):
         
         site_list = fetch_site_list(service)
         if not site_list:
-            console.print("[bold red]Unable to fetch site list. Please check your credentials and try again.[/bold red]")
+            console.print("[bold red][-] Unable to fetch site list. Please check your credentials and try again.[/bold red]")
             creds_path = None  # Prompt for credentials path again
             continue
 
-        console.print("[green]Available sites in your GSC account:[/green]")
+        console.print("[green][+] Available sites in your GSC account:[/green]")
         site_entries = site_list.get('siteEntry', [])
         for index, site in enumerate(site_entries, start=1):
-            console.print(f"[cyan]{index}.[/cyan] {site['siteUrl']}")
+            console.print(f"[cyan][+] {index}.[/cyan] {site['siteUrl']}")
 
         site_choice = click.prompt(click.style("Enter the number of the site you want to select (or type 'exit' to quit)", fg="magenta"))
         if site_choice.lower() == 'exit':
@@ -226,17 +226,17 @@ def gsc_probe(ctx):
         try:
             site_index = int(site_choice) - 1
             if site_index < 0 or site_index >= len(site_entries):
-                raise ValueError("Invalid site number.")
+                raise ValueError("[-] Invalid site number.")
             site_url = site_entries[site_index]['siteUrl']
         except ValueError as ve:
-            console.print(f"[red]{ve}. Please enter a valid number.")
+            console.print(f"[red][-] {ve}. Please enter a valid number.")
             continue
 
         start_date, _ = get_available_dates(service, site_url)
         end_date = (datetime.now(timezone.utc) - timedelta(days=3)).strftime('%Y-%m-%d')
 
         if not start_date or not end_date:
-            console.print("[bold red]Unable to fetch available dates. Please check your site and try again.[/bold red]")
+            console.print("[bold red][-] Unable to fetch available dates. Please check your site and try again.[/bold red]")
             continue
         
         available_dimensions = "date,query,page,country,device,searchAppearance"
@@ -258,7 +258,7 @@ def gsc_probe(ctx):
                     try:
                         row_limit = int(row_limit_input)
                     except ValueError:
-                        console.print("[red]Invalid row limit. Please enter a valid number or 'max'.[/red]")
+                        console.print("[red][-] Invalid row limit. Please enter a valid number or 'max'.[/red]")
                         continue
 
                 filters = []
@@ -303,29 +303,29 @@ def gsc_probe(ctx):
                 
                 data = load_progress(output_file)
                 if data:
-                    console.log("[yellow]Resuming from previous progress...[/yellow]")
+                    console.log("[yellow][+] Resuming from previous progress...[/yellow]")
                 else:
-                    console.log("[green]Starting new GSC data extraction...[/green]")
+                    console.log("[green][+] Starting new GSC data extraction...[/green]")
                 
-                console.log("[green]Fetching GSC data...[/green]")
+                console.log("[green][+] Fetching GSC data...[/green]")
                 new_data = fetch_search_analytics(service, site_url, start_date_input, end_date_input, dimensions, row_limit, filters)
                 data.extend(new_data)
                 
                 if not data:
-                    console.print("[red]No data fetched. Please check your query parameters and try again.[/red]")
+                    console.print("[red][-] No data fetched. Please check your query parameters and try again.[/red]")
                 else:
                     df = pd.DataFrame(data)
                     df.to_csv(output_file, index=False, encoding='utf-8')
                     if os.path.exists(output_file + ".temp"):
                         os.remove(output_file + ".temp")
-                    console.log(f"[green]GSC data saved to {output_file}[/green]")
+                    console.log(f"[green][+] GSC data saved to {output_file}[/green]")
             
             elif data_type == 2:
-                console.log("[green]Fetching sitemaps data...[/green]")
+                console.log("[green][+] Fetching sitemaps data...[/green]")
                 sitemaps = fetch_sitemaps(service, site_url)
                 if sitemaps:
                     num_sitemaps = len(sitemaps)
-                    console.log(f"[green]Sitemaps data saved. Number of sitemaps saved: {num_sitemaps}[/green]")
+                    console.log(f"[green][+] Sitemaps data saved. Number of sitemaps saved: {num_sitemaps}[/green]")
             
             elif data_type == 3:
                 console.print("\n[yellow]URL Inspection Options:[/yellow]\n")
@@ -333,7 +333,7 @@ def gsc_probe(ctx):
 
                 if url_inspect_type == 1:
                     url = click.prompt(click.style("Enter the URL to inspect", fg="magenta"))
-                    console.log("[green]Fetching URL inspection data...[/green]")
+                    console.log("[green][+] Fetching URL inspection data...[/green]")
                     inspection_result = fetch_url_inspection(service, site_url, [url])
                     if inspection_result:
                         console.print(inspection_result)
@@ -343,22 +343,22 @@ def gsc_probe(ctx):
                     try:
                         df = pd.read_csv(csv_file_path, encoding='utf-8')
                         urls = df['urls'].tolist()
-                        console.log("[green]Fetching URL inspection data...[/green]")
+                        console.log("[green][+] Fetching URL inspection data...[/green]")
                         inspection_results = fetch_url_inspection(service, site_url, urls)
                         if inspection_results:
                             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                             output_filename = f"gsc_data/url_inspection_output_{timestamp}.csv"
                             output_file = click.prompt(click.style(f"Enter the path to the output CSV file (leave blank for default: {output_filename})", fg="magenta"), default=output_filename, show_default=True)
                             pd.DataFrame(inspection_results).to_csv(output_file, index=False, encoding='utf-8')
-                            console.log(f"[green]URL inspection data saved to {output_file}[/green]")
+                            console.log(f"[green][+] URL inspection data saved to {output_file}[/green]")
                     except Exception as e:
-                        console.print(f"[bold red]An error occurred while reading the CSV file: {e}[/bold red]")
+                        console.print(f"[bold red][-] An error occurred while reading the CSV file: {e}[/bold red]")
 
             elif data_type == 4:
                 break
 
             else:
-                console.print("[red]Invalid choice! Please select a valid option.[/red]")
+                console.print("[red][-] Invalid choice! Please select a valid option.[/red]")
 
 if __name__ == "__main__":
     gsc_probe()

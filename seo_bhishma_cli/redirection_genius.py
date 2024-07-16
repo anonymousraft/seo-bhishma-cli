@@ -23,7 +23,7 @@ def ensure_spacy_model(model_name):
     try:
         nlp = spacy.load(model_name)
     except OSError:
-        print(f"Downloading spaCy model '{model_name}'...")
+        print(f"[+] Downloading spaCy model '{model_name}'...")
         download(model_name)
         nlp = spacy.load(model_name)
     return nlp
@@ -45,7 +45,7 @@ progress_data = []
 def signal_handler(sig, frame):
     global interrupted
     interrupted = True
-    console.log("[bold yellow]Process interrupted! Progress will be saved.[/bold yellow]")
+    console.log("[bold yellow][-] Process interrupted! Progress will be saved.[/bold yellow]")
 
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
@@ -81,17 +81,17 @@ def get_web_content(url, rate_limit):
         response.raise_for_status()
         return response.text
     except requests.RequestException as e:
-        logger.error(f"Error fetching web content for URL {url}: {e}")
+        logger.error(f"[-] Error fetching web content for URL {url}: {e}")
         return None
 
 def save_progress(output_file, data):
     try:
         temp_file = output_file + ".temp"
         df = pd.DataFrame(data, columns=['source', 'destination', 'confidence_score', 'remark'])
-        df.to_csv(temp_file, index=False)
-        console.log(f"[bold yellow]Progress saved to {temp_file}[/bold yellow]")
+        df.to_csv(temp_file, index=False, encoding='utf-8')
+        console.log(f"[bold yellow][+] Progress saved to {temp_file}[/bold yellow]")
     except Exception as e:
-        console.log(f"[bold red]Failed to save progress: {e}[/bold red]")
+        console.log(f"[bold red][-] Failed to save progress: {e}[/bold red]")
 
 def map_urls(source_urls, dest_urls, use_web_content_check, rate_limit, output_file):
     global interrupted, progress_data
@@ -108,11 +108,11 @@ def map_urls(source_urls, dest_urls, use_web_content_check, rate_limit, output_f
         # TF-IDF similarity
         tfidf_sim = tfidf_similarity(source_lemmas, dest_lemmas)
     except Exception as e:
-        console.log(f"[bold red]Error processing URL slugs or lemmas: {e}[/bold red]")
+        console.log(f"[bold red][-] Error processing URL slugs or lemmas: {e}[/bold red]")
         return []
 
     with Progress(BarColumn(), "[progress.percentage]{task.percentage:>3.1f}%", TimeRemainingColumn(), console=console) as progress:
-        task = progress.add_task("[cyan]Mapping URLs...", total=len(source_urls))
+        task = progress.add_task("[cyan][+] Mapping URLs...", total=len(source_urls))
 
         with ThreadPoolExecutor(max_workers=10) as executor:
             future_to_url = {executor.submit(process_url_mapping, i, source_url, dest_urls, tfidf_sim[i], use_web_content_check, rate_limit): source_url for i, source_url in enumerate(source_urls)}
@@ -131,10 +131,10 @@ def map_urls(source_urls, dest_urls, use_web_content_check, rate_limit, output_f
                     if result and result[3] == 'Error':
                         error_count += 1
                         if error_count > 5:
-                            console.log("[bold red]Too many errors in fetching web content. Skipping URL content check and continuing with normal process.[/bold red]")
+                            console.log("[bold red][-] Too many errors in fetching web content. Skipping URL content check and continuing with normal process.[/bold red]")
                             use_web_content_check = False
                 except Exception as e:
-                    console.log(f"[bold red]Error processing URL mapping: {e}[/bold red]")
+                    console.log(f"[bold red][-] Error processing URL mapping: {e}[/bold red]")
 
     return results
 
@@ -162,27 +162,27 @@ def process_url_mapping(i, source_url, dest_urls, tfidf_scores, use_web_content_
         
         return (source_url, dest_urls[best_match_idx], best_match_score, remark)
     except Exception as e:
-        logger.error(f"Error in processing URL mapping for {source_url}: {e}")
+        logger.error(f"[-] Error in processing URL mapping for {source_url}: {e}")
         return (source_url, '', 0, 'Error')
 
 def start_redirection():
     input_file = click.prompt(click.style("Enter the path to the input CSV file", fg="cyan", bold=True))
     if not os.path.isfile(input_file):
-        console.print("[bold red]Input file not found. Please check the file path and try again.[/bold red]")
+        console.print("[bold red][-] Input file not found. Please check the file path and try again.[/bold red]")
         return
     try:
         df = pd.read_csv(input_file)
         if df.empty:
-            console.print("[bold red]Input file is empty. Please provide a valid CSV file.[/bold red]")
+            console.print("[bold red][-] Input file is empty. Please provide a valid CSV file.[/bold red]")
             return
         if 'source' not in df.columns or 'destination' not in df.columns:
-            console.print("[bold red]Input file must contain 'source' and 'destination' columns.[/bold red]")
+            console.print("[bold red][-] Input file must contain 'source' and 'destination' columns.[/bold red]")
             return
     except pd.errors.EmptyDataError:
-        console.print("[bold red]Input file is empty. Please provide a valid CSV file.[/bold red]")
+        console.print("[bold red][-] Input file is empty. Please provide a valid CSV file.[/bold red]")
         return
     except Exception as e:
-        console.print(f"[bold red]An unexpected error occurred while reading the input file: {e}[/bold red]")
+        console.print(f"[bold red][-] An unexpected error occurred while reading the input file: {e}[/bold red]")
         return
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -196,22 +196,23 @@ def start_redirection():
     source_urls = df['source'].tolist()
     dest_urls = df['destination'].tolist()
     
-    console.log("[green]Starting URL mapping...[/green]")
+    console.log("[green][+] Starting URL mapping...[/green]")
 
     results = map_urls(source_urls, dest_urls, use_web_content_check, rate_limit, output_file)
     
     output_df = pd.DataFrame(results, columns=['source', 'destination', 'confidence_score', 'remark'])
-    output_df.to_csv(output_file, index=False)
+    output_df.to_csv(output_file, index=False, encoding='utf-8')
     
-    console.log(f"[green]URL mapping completed. Output saved to {output_file}[/green]")
-    console.print("[blue]Summary:[/blue]")
-    console.print(f"[blue]Total Source URLs: {len(source_urls)}[/blue]")
-    console.print(f"[blue]Total Destination URLs: {len(dest_urls)}[/blue]")
-    console.print(f"[blue]Mapped URLs: {len(results)}[/blue]")
+    console.log(f"[green][+] URL mapping completed. Output saved to {output_file}[/green]")
+    console.print("[blue][+] Summary:[/blue]")
+    console.print(f"[blue][+] Total Source URLs: {len(source_urls)}[/blue]")
+    console.print(f"[blue][+] Total Destination URLs: {len(dest_urls)}[/blue]")
+    console.print(f"[blue][+] Mapped URLs: {len(results)}[/blue]")
 
 @click.command()
 @click.pass_context
 def redirection_genius(ctx):
+    """Powerful & intelligent redirect URL mapper."""
     while True:
         console.print()
         console.print("[magenta]=============================[/magenta]")
@@ -230,7 +231,7 @@ def redirection_genius(ctx):
             break
             # raise SystemExit
         else:
-            console.print("[bold red]Invalid choice! Please try again.[/bold red]")
+            console.print("[bold red][-] Invalid choice! Please try again.[/bold red]")
 
 if __name__ == "__main__":
     redirection_genius()

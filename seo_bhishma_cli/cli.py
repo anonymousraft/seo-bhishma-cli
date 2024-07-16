@@ -16,19 +16,20 @@ def cli(ctx):
         ascii_art = text2art(CLI_NAME, font='small')
         console.print(f"[bold bright_cyan]{ascii_art}[/bold bright_cyan]")
         console.print(f"[bold green]Welcome to {CLI_NAME}![/bold green]")
-        console.print(f"[green]Version: {CLI_VERSION}[/green]")
-        console.print(f"[green]Author: {CLI_AUTHOR}\n[/green]")
+        console.print(f"[green][+] Version: {CLI_VERSION}[/green]")
+        console.print(f"[green][+] Author: {CLI_AUTHOR}\n[/green]")
         console.print(f"[dim white]This tool is my way of giving back to the community.[/dim white]")
         console.print(f"[dim white]Support: [underline]https://buymeacoffee.com/rathorehitendra[/underline][/dim white]\n")
 
         if ctx.invoked_subcommand is None:
             ctx.invoke(menu)
     except Exception as e:
-        console.print(f"[bold red]An error occurred: {e}[/bold red]")
+        console.print(f"[bold red][-] An error occurred: {e}[/bold red]")
 
 @click.command()
 @click.pass_context
 def menu(ctx):
+    """Main Menu of SEO Bhishma"""
     while True:
         try:
             table = Table(show_header=False, box=None)
@@ -66,7 +67,7 @@ def menu(ctx):
                 console.print(f"[bold red]Exiting {CLI_NAME}. Goodbye![/bold red]")
                 break
         except Exception as e:
-            console.print(f"[bold red]An error occurred: {e}[/bold red]")
+            console.print(f"[bold red][-] An error occurred: {e}[/bold red]")
 
 cli.add_command(menu)
 cli.add_command(link_sniper)

@@ -33,12 +33,12 @@ def load_config():
 
 # Function to save configuration
 def save_config(config):
-    with open(CONFIG_FILE, 'w') as file:
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as file:
         yaml.safe_dump(config, file)
 
 # Function to save progress
 def save_progress(progress):
-    with open(PROGRESS_FILE, 'w') as file:
+    with open(PROGRESS_FILE, 'w', encoding='utf-8') as file:
         yaml.safe_dump(progress, file)
 
 # Function to load progress
@@ -54,7 +54,7 @@ def load_progress():
 def load_keywords(file_path):
     df = pd.read_csv(file_path)
     if 'keywords' not in df.columns or 'search_volume' not in df.columns:
-        raise ValueError("Input CSV must contain 'keywords' and 'search_volume' columns")
+        raise ValueError("[-] Input CSV must contain 'keywords' and 'search_volume' columns")
     return df
 
 # Function to estimate token usage
@@ -82,7 +82,7 @@ def generate_embeddings(keywords, api_key):
     progress = load_progress()
     start_index = progress.get('start_index', 0)
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), BarColumn(), TimeRemainingColumn()) as progress_bar:
-        task = progress_bar.add_task("[green]Generating embeddings", total=len(keywords) - start_index)
+        task = progress_bar.add_task("[green][+] Generating embeddings", total=len(keywords) - start_index)
         for i, keyword in enumerate(keywords[start_index:], start=start_index):
             try:
                 response = client.chat.completions.create(
@@ -100,7 +100,7 @@ def generate_embeddings(keywords, api_key):
                 save_progress(progress)
                 time.sleep(0.5)  # Rate limiting
             except Exception as e:
-                console.print(f"[red]Error generating embedding for '{keyword}': {e}")
+                console.print(f"[red][-] Error generating embedding for '{keyword}': {e}")
                 embeddings.append('')
     return embeddings
 
@@ -149,7 +149,7 @@ def cluster_keywords_dbscan(embeddings):
     try:
         score = silhouette_score(X, labels)
     except ValueError as e:
-        console.print(f"[yellow]Warning: {e}")
+        console.print(f"[yellow][/] Warning: {e}")
         score = None
     return labels, score
 
@@ -172,7 +172,7 @@ def cluster_keywords_spectral(embeddings, min_clusters, max_clusters):
 def save_clusters_to_csv(df, labels, clusters, scores, output_file):
     df['keyword_theme'] = [clusters[label] for label in labels]
     df['confidence_score'] = scores
-    df.to_csv(output_file, index=False)
+    df.to_csv(output_file, index=False, encoding='utf-8')
 
 @click.command()
 @click.pass_context
@@ -204,11 +204,11 @@ def keyword_sorcerer(ctx):
             else:
                 api_key = config['api_key']
 
-            console.print("[green bold]Loading keywords...")
+            console.print("[green bold][+] Loading keywords...")
             try:
                 df = load_keywords(input_file)
             except Exception as e:
-                console.print(f"[red]Error loading keywords: {e}")
+                console.print(f"[red][-] Error loading keywords: {e}")
                 continue
 
             total_tokens = estimate_token_usage(df['keywords'].tolist())
@@ -218,21 +218,21 @@ def keyword_sorcerer(ctx):
 
             proceed = Prompt.ask("[cyan]Do you want to proceed?", default="no")
             if proceed.lower() != "yes":
-                console.print("[red]Operation cancelled by user.")
+                console.print("[red][-] Operation cancelled by user.")
                 continue
 
-            console.print("[green bold]Generating embeddings...")
+            console.print("[green bold][+] Generating embeddings...")
             try:
                 embeddings = generate_embeddings(df['keywords'].tolist(), api_key)
                 if not any(embeddings):
-                    raise ValueError("All embeddings are empty. Check the input data or OpenAI responses.")
+                    raise ValueError("[-] All embeddings are empty. Check the input data or OpenAI responses.")
             except Exception as e:
-                console.print(f"[red]Error generating embeddings: {e}")
+                console.print(f"[red][-] Error generating embeddings: {e}")
                 continue
 
             min_clusters, max_clusters = calculate_optimal_clusters(len(df), min_keywords_per_cluster=4, max_keywords_per_cluster=8)
 
-            console.print("[green bold]Clustering keywords...")
+            console.print("[green bold][+] Clustering keywords...")
             try:
                 if choice == "1":
                     labels, score = cluster_keywords_kmeans(embeddings, min_clusters, max_clusters)
@@ -243,23 +243,23 @@ def keyword_sorcerer(ctx):
                 elif choice == "4":
                     labels, score = cluster_keywords_spectral(embeddings, min_clusters, max_clusters)
                 else:
-                    console.print("[red]Invalid choice. Please select a valid option.")
+                    console.print("[red][-] Invalid choice. Please select a valid option.")
                     continue
                 clusters = determine_cluster_names(df['keywords'], labels)
             except Exception as e:
-                console.print(f"[red]Error clustering keywords: {e}")
+                console.print(f"[red][-] Error clustering keywords: {e}")
                 continue
 
-            console.print("[green bold]Saving clustered keywords...")
+            console.print("[green bold][+] Saving clustered keywords...")
             try:
                 save_clusters_to_csv(df, labels, clusters, [score] * len(labels), output_file)
             except Exception as e:
-                console.print(f"[red]Error saving clustered keywords: {e}")
+                console.print(f"[red][-] Error saving clustered keywords: {e}")
                 continue
 
-            console.print(f"[green bold]Keyword clustering complete. {len(clusters)} clusters created for {len(df)} keywords.")
+            console.print(f"[green bold][+] Keyword clustering complete. {len(clusters)} clusters created for {len(df)} keywords.")
         else:
-            console.print("[red]Invalid choice. Please select a valid option.")
+            console.print("[red][-] Invalid choice. Please select a valid option.")
 
         console.print("\n" + "="*50 + "\n")
 

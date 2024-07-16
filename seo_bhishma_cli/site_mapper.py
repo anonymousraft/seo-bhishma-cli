@@ -24,8 +24,19 @@ NAMESPACE = {'ns': 'http://www.sitemaps.org/schemas/sitemap/0.9'}
 progress = None
 output_file = None
 
+def extract_domain(url):
+    try:
+        parsed_url = urlparse(url)
+        domain = parsed_url.netloc if parsed_url.netloc else parsed_url.path
+        if domain.startswith("www."):
+            domain = domain[4:]
+        return domain
+    except Exception as e:
+        console.log(f"[bold red]Error extracting domain from URL: {e}[/bold red]")
+        return None
+
 def signal_handler(sig, frame):
-    console.log("[bold yellow]Process interrupted! Progress has been saved.[/bold yellow]")
+    console.log("[bold yellow][+] Process interrupted! Progress has been saved.[/bold yellow]")
     if progress:
         save_progress(progress['urls'], output_file)
     exit(0)
@@ -43,15 +54,15 @@ def download_sitemap(url):
         else:
             return ET.fromstring(response.content)
     except requests.RequestException as e:
-        console.log(f"[bold red]Error downloading sitemap: {e}[/bold red]")
+        console.log(f"[bold red][-] Error downloading sitemap: {e}[/bold red]")
         return None
     except ET.ParseError as e:
-        console.log(f"[bold red]Error parsing sitemap: {e}[/bold red]")
+        console.log(f"[bold red][-] Error parsing sitemap: {e}[/bold red]")
         return None
 
 def save_progress(urls, output_file):
     temp_file = output_file + ".temp"
-    with open(temp_file, 'w') as f:
+    with open(temp_file, 'w', encoding='utf-8') as f:
         json.dump(urls, f)
 
 def load_progress(output_file):
@@ -100,24 +111,24 @@ def parse_url_element(url_elem, sitemap_name):
             'news': news_data
         }
     except Exception as e:
-        console.log(f"[bold red]Error parsing URL element: {e}[/bold red]")
+        console.log(f"[bold red][-] Error parsing URL element: {e}[/bold red]")
         return None
 
 def parse_sitemap(root, urls, sitemap_name, level=0, output_file=None):
     sitemaps = root.findall('ns:sitemap', NAMESPACE)
     if sitemaps:
-        console.log(f"[blue]Found {len(sitemaps)} nested sitemaps. Parsing...[/blue]")
+        console.log(f"[blue][+] Found {len(sitemaps)} nested sitemaps. Parsing...[/blue]")
         for i, sitemap in enumerate(sitemaps, start=1):
             loc = sitemap.find('ns:loc', NAMESPACE).text
-            console.log(f"[yellow]Parsing sitemap {i}/{len(sitemaps)}: {loc}[/yellow]")
+            console.log(f"[yellow][+] Parsing sitemap {i}/{len(sitemaps)}: {loc}[/yellow]")
             sitemap_root = download_sitemap(loc)
             if sitemap_root:
                 parse_sitemap(sitemap_root, urls, loc, level + 1, output_file)
     else:
         url_count = len(root.findall('ns:url', NAMESPACE))
-        console.log(f"[blue]Parsing {url_count} URLs in sitemap...[/blue]")
+        console.log(f"[blue][+] Parsing {url_count} URLs in sitemap...[/blue]")
         with Progress(BarColumn(), "[progress.percentage]{task.percentage:>3.1f}%", TimeRemainingColumn(), console=console) as progress_bar:
-            task = progress_bar.add_task("[cyan]Parsing URLs...", total=url_count)
+            task = progress_bar.add_task("[cyan][+] Parsing URLs...", total=url_count)
             with ThreadPoolExecutor(max_workers=10) as executor:
                 futures = {executor.submit(parse_url_element, url_elem, sitemap_name): url_elem for url_elem in root.findall('ns:url', NAMESPACE)}
                 for future in as_completed(futures):
@@ -133,27 +144,29 @@ def site_mapper():
     
     sitemap_url = click.prompt(click.style("Enter the URL of the sitemap (supports .xml and .gz)", fg="cyan", bold=True))
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    default_filename = f"sitemap_output_{timestamp}.csv"
+    domain_name = extract_domain(sitemap_url)
+    default_filename = f"{domain_name}_sitemap_{timestamp}.csv"
     output_file = click.prompt(click.style(f"Enter the path to the output CSV file (leave blank for default: {default_filename})", fg="cyan", bold=True), default=default_filename, show_default=True)
     
     urls = load_progress(output_file)
     if urls:
-        console.log("[yellow]Resuming from previous progress...[/yellow]")
+        console.log("[yellow][+] Resuming from previous progress...[/yellow]")
     else:
-        console.log("[green]Starting new sitemap parsing...[/green]")
+        console.log("[green][+] Starting new sitemap parsing...[/green]")
     
-    console.log("[green]Downloading and parsing sitemap...[/green]")
+    console.log("[green][+] Downloading and parsing sitemap...[/green]")
     root = download_sitemap(sitemap_url)
     if root:
         progress = {'urls': urls}
         parse_sitemap(root, urls, sitemap_url, output_file=output_file)
         df = pd.DataFrame(urls)
-        df.to_csv(output_file, index=False)
+        df.to_csv(output_file, index=False, encoding='utf-8')
         if os.path.exists(output_file + ".temp"):
             os.remove(output_file + ".temp")
-        console.log(f"[green]Sitemap data saved to {output_file}[/green]")
+        console.log(f"[green][+] Sitemap data saved to {output_file}[/green]")
+        console.log("\n")
     else:
-        console.log("[bold red]Failed to process sitemap.[/bold red]")
+        console.log("[bold red][-] Failed to process sitemap.[/bold red]")
 
 if __name__ == "__main__":
     site_mapper()

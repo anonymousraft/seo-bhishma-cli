@@ -42,7 +42,7 @@ def extract_domain(url):
             domain = domain[4:]
         return domain
     except Exception as e:
-        console.log(f"[bold red]Error extracting domain from URL: {e}[/bold red]")
+        console.log(f"[bold red][-] Error extracting domain from URL: {e}[/bold red]")
         return None
 
 def set_domain():
@@ -53,16 +53,16 @@ def set_domain():
             current_domain = extract_domain(user_input)
             break
         else:
-            console.print("[bold red]Invalid domain or URL. Please try again.[/bold red]")
+            console.print("[bold red][-] Invalid domain or URL. Please try again.[/bold red]")
 
 def get_ip_address(domain):
     try:
         return socket.gethostbyname(domain)
     except Exception as e:
-        console.log(f"[bold red]Error retrieving IP address for {domain}: {e}[/bold red]")
+        console.log(f"[bold red][-] Error retrieving IP address for {domain}: {e}[/bold red]")
         return None
 
-def reverse_ip_lookup(ip):
+def reverse_ip_lookup(ip, domain):
     try:
         headers = {
             "User-Agent": ua.random,
@@ -93,8 +93,8 @@ def reverse_ip_lookup(ip):
 
             # Save the reverse IP lookup results to a file
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_file = f"{ip}_reverse_ip_{timestamp}.txt"
-            with open(output_file, 'w') as file:
+            output_file = f"{domain}_reverse_ip_{timestamp}.txt"
+            with open(output_file, 'w', encoding='utf-8') as file:
                 file.write(f"Title: {h1_title}\n\n")
                 file.write("Table Information:\n")
                 for key, value in table_info.items():
@@ -105,10 +105,10 @@ def reverse_ip_lookup(ip):
 
             return h1_title, table_info, domains_list, output_file
         else:
-            console.log(f"[bold red]Error performing reverse IP lookup: {response.status_code}[/bold red]")
+            console.log(f"[bold red][-] Error performing reverse IP lookup: {response.status_code}[/bold red]")
             return None, None, None, None
     except Exception as e:
-        console.log(f"[bold red]Error performing reverse IP lookup: {e}[/bold red]")
+        console.log(f"[bold red][-] Error performing reverse IP lookup: {e}[/bold red]")
         return None, None, None, None
 
 def find_subdomains(domain):
@@ -118,7 +118,7 @@ def find_subdomains(domain):
         sub_domains = sublist3r.main(domain, 40, output_file, ports= None, silent=False, verbose= False, enable_bruteforce= False, engines=None)
         return sub_domains
     except Exception as e:
-        console.log(f"[bold red]Error finding subdomains: {e}[/bold red]")
+        console.log(f"[bold red][-] Error finding subdomains: {e}[/bold red]")
         return None
 
 def get_dns_records(domain):
@@ -127,7 +127,7 @@ def get_dns_records(domain):
         resolver = dns.resolver.Resolver()
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = f"{domain}_dns_records_{timestamp}.txt"
-        with open(output_file, 'w') as file:
+        with open(output_file, 'w', encoding='utf-8') as file:
             for record_type in ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CNAME']:
                 try:
                     answers = resolver.resolve(domain, record_type)
@@ -138,7 +138,7 @@ def get_dns_records(domain):
                     file.write(f"{record_type}: No record found\n")
         return records, output_file
     except Exception as e:
-        console.log(f"[bold red]Error retrieving DNS records: {e}[/bold red]")
+        console.log(f"[bold red][-] Error retrieving DNS records: {e}[/bold red]")
         return {}, None
 
 def check_robots_txt(domain):
@@ -161,7 +161,7 @@ def check_robots_txt(domain):
             if response.status_code == 200:
                 disallows += [line for line in response.text.splitlines() if line.startswith('Disallow')]
         except Exception as e:
-            console.log(f"[bold red]Error retrieving robots.txt from {url}: {e}[/bold red]")
+            console.log(f"[bold red][-] Error retrieving robots.txt from {url}: {e}[/bold red]")
     return disallows
 
 def format_whois_info(info):
@@ -182,15 +182,15 @@ def get_whois_info(domain):
         # Save the WHOIS information to a file
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = f"{domain_without_sub}_whois_{timestamp}.txt"
-        with open(output_file, 'w') as file:
+        with open(output_file, 'w', encoding='utf-8') as file:
             for key, value in formatted_info.items():
                 file.write(f"{key}: {value}\n")
         return formatted_info, output_file
     except Exception as e:
-        console.log(f"[bold red]Error retrieving WHOIS information: {e}[/bold red]")
+        console.log(f"[bold red][-] Error retrieving WHOIS information: {e}[/bold red]")
         return {}, None
 
-def get_ip_details(ip):
+def get_ip_details(ip, domain):
     ip_info = {}
 
     try:
@@ -207,7 +207,7 @@ def get_ip_details(ip):
         })
 
     except Exception as e:
-        console.log(f"[bold red]Error retrieving ASN details: {e}[/bold red]")
+        console.log(f"[bold red][-] Error retrieving ASN details: {e}[/bold red]")
 
     try:
         # Get additional IP information from ipinfo.io
@@ -227,19 +227,19 @@ def get_ip_details(ip):
             })
 
     except Exception as e:
-        console.log(f"[bold red]Error retrieving ipinfo.io details: {e}[/bold red]")
+        console.log(f"[bold red][-] Error retrieving ipinfo.io details: {e}[/bold red]")
 
     # Save the IP information to a file with UTF-8 encoding
     try:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = f"{ip}_ip_info_{timestamp}.txt"
+        output_file = f"{domain}_ip_info_{timestamp}.txt"
         with open(output_file, 'w', encoding='utf-8') as file:
             for key, value in ip_info.items():
                 file.write(f"{key}: {value}\n")
 
         return ip_info, output_file
     except Exception as e:
-        console.log(f"[bold red]Error saving IP details to file: {e}[/bold red]")
+        console.log(f"[bold red][-] Error saving IP details to file: {e}[/bold red]")
         return ip_info, None
 
 def display_results(results):
@@ -309,11 +309,12 @@ def tech_analysis(domain):
     for tech in technologies:
         console.print(f"[+] {tech}", style="yellow")
 
-    console.print(f"[bold green]Analysis saved to {filename}[/bold green]")
+    console.print(f"[bold green][+] Analysis saved to {filename}[/bold green]")
 
 @click.command()
 @click.pass_context
 def domain_insight(ctx):
+    """Advanced domain information gathering tool."""
     global current_domain
 
     while True:
@@ -342,52 +343,52 @@ def domain_insight(ctx):
             if choice == 1:
                 task = progress.add_task("Checking IP address and other websites...", total=None)
                 ip = get_ip_address(current_domain)
-                h1_title, table_info, domains_list, output_file = reverse_ip_lookup(ip) if ip else (None, None, None, None)
+                h1_title, table_info, domains_list, output_file = reverse_ip_lookup(ip, current_domain) if ip else (None, None, None, None)
                 progress.update(task, completed=True)
                 if h1_title and table_info and domains_list:
-                    console.print(f"[bold green]{h1_title}[/bold green]")
-                    console.print(f"[bold]IP Info:[/bold]")
+                    console.print(f"[bold green][+] {h1_title}[/bold green]")
+                    console.print(f"[bold][+] IP Info:[/bold]")
                     for key, value in table_info.items():
                         console.print(f"{key}: {value}")
-                    console.print(f"[bold]Domains List:[/bold]")
+                    console.print(f"[bold][+] Domains List:[/bold]")
                     for domain in domains_list:
-                        console.print(f"- {domain}")
-                    console.print(f"[bold green]Results saved to {output_file}[/bold green]")
+                        console.print(f"[+] {domain}")
+                    console.print(f"[bold green][+] Results saved to {output_file}[/bold green]")
                 else:
-                    console.print(f"[bold red]Failed to retrieve reverse IP lookup information.[/bold red]")
+                    console.print(f"[bold red][-] Failed to retrieve reverse IP lookup information.[/bold red]")
             elif choice == 2:
                 subdomains = find_subdomains(current_domain)
             elif choice == 3:
-                task = progress.add_task("Checking DNS records...", total=None)
+                task = progress.add_task("[+] Checking DNS records...", total=None)
                 dns_records, output_file = get_dns_records(current_domain)
                 progress.update(task, completed=True)
-                console.log(f"DNS records saved to {output_file}")
+                console.log(f"[+] DNS records saved to {output_file}")
                 display_results([f"{record_type}: {', '.join(records)}" for record_type, records in dns_records.items()])
             elif choice == 4:
-                task = progress.add_task("Checking robots.txt...", total=None)
+                task = progress.add_task("[+] Checking robots.txt...", total=None)
                 robots_txt = check_robots_txt(current_domain)
                 progress.update(task, completed=True)
                 if robots_txt:
-                    display_results([f"Disallowed rules in robots.txt:"] + [f" - {rule}" for rule in robots_txt])
+                    display_results([f"[+] Disallowed rules in robots.txt:"] + [f" - {rule}" for rule in robots_txt])
                 else:
-                    console.print("[bold red]robots.txt not found on any of the checked URLs.[/bold red]")
+                    console.print("[bold red][-] robots.txt not found on any of the checked URLs.[/bold red]")
             elif choice == 5:
-                task = progress.add_task("Checking WHOIS record...", total=None)
+                task = progress.add_task("[+] Checking WHOIS record...", total=None)
                 whois_info, output_file = get_whois_info(current_domain)
                 progress.update(task, completed=True)
                 if whois_info:
                     display_results([f"{key}: {value}" for key, value in whois_info.items()])
-                    console.print(f"[bold green]WHOIS results saved to {output_file}[/bold green]")
+                    console.print(f"[bold green][+] WHOIS results saved to {output_file}[/bold green]")
                 else:
-                    console.print(f"[bold red]Failed to retrieve WHOIS information.[/bold red]")
+                    console.print(f"[bold red][-] Failed to retrieve WHOIS information.[/bold red]")
             elif choice == 6:
-                task = progress.add_task("Getting IP address details...", total=None)
+                task = progress.add_task("[+] Getting IP address details...", total=None)
                 ip = get_ip_address(current_domain)
-                ip_details, output_file = get_ip_details(ip) if ip else ({}, None)
+                ip_details, output_file = get_ip_details(ip, current_domain) if ip else ({}, None)
                 progress.update(task, completed=True)
                 display_results([f"{key}: {value}" for key, value in ip_details.items()])
                 if output_file:
-                    console.print(f"[bold green]IP details saved to {output_file}[/bold green]")
+                    console.print(f"[bold green][+] IP details saved to {output_file}[/bold green]")
             elif choice == 7:
                 tech_analysis(current_domain)
             elif choice == 0:
@@ -395,7 +396,7 @@ def domain_insight(ctx):
                 console.print("[bold red]Thank you for using Domain Insight![/bold red]")
                 break
             else:
-                console.print("[bold red]Invalid choice! Please try again.[/bold red]")
+                console.print("[bold red][-] Invalid choice! Please try again.[/bold red]")
 
 if __name__ == "__main__":
     domain_insight()
