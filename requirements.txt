@@ -20,3 +20,4 @@ sublist3r
 python-whois
 geopy
 fake-useragent
+python-wappalyzer

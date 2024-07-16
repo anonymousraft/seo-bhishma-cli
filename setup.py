@@ -34,7 +34,8 @@ setup(
         'sublist3r',
         'python-whois',
         'geopy',
-        'fake-useragent'
+        'fake-useragent',
+        'python-wappalyzer'
     ],
     entry_points={
         'console_scripts': [

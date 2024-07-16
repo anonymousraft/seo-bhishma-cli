@@ -6,6 +6,7 @@ import click
 import subprocess
 import datetime
 import re
+import sublist3r
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from ipwhois import IPWhois
@@ -13,10 +14,12 @@ from geopy.geocoders import Nominatim
 from fake_useragent import UserAgent
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from Wappalyzer import Wappalyzer, WebPage
 
 # Initialize rich console
 console = Console()
 geolocator = Nominatim(user_agent="domain_insight")
+
 ua = UserAgent()
 
 # Global variable to store the domain for the session
@@ -112,17 +115,11 @@ def find_subdomains(domain):
     try:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = f"{domain}_subdomains_{timestamp}.txt"
-        result = subprocess.run(['sublist3r', '-d', domain, '-o', output_file], capture_output=True, text=True)
-        if result.returncode == 0:
-            with open(output_file, 'r') as file:
-                subdomains = file.read().splitlines()
-            return subdomains, output_file
-        else:
-            console.log(f"[bold red]Error finding subdomains: {result.stderr}[/bold red]")
-            return [], None
+        sub_domains = sublist3r.main(domain, 40, output_file, ports= None, silent=False, verbose= False, enable_bruteforce= False, engines=None)
+        return sub_domains
     except Exception as e:
         console.log(f"[bold red]Error finding subdomains: {e}[/bold red]")
-        return [], None
+        return None
 
 def get_dns_records(domain):
     try:
@@ -194,39 +191,125 @@ def get_whois_info(domain):
         return {}, None
 
 def get_ip_details(ip):
+    ip_info = {}
+
     try:
+        # Get ASN information from IPWhois
         obj = IPWhois(ip)
         results = obj.lookup_rdap()
-        ip_info = {
+        ip_info.update({
             'ASN': results.get('asn'),
             'ASN Country Code': results.get('asn_country_code'),
             'ASN Date': results.get('asn_date'),
             'ASN Description': results.get('asn_description'),
             'ASN CIDR': results.get('asn_cidr'),
             'ASN Registry': results.get('asn_registry')
-        }
+        })
 
-        if 'asn' in results:
-            geo_info = geolocator.geocode(results['asn'])
-            if geo_info:
-                ip_info['Geolocation'] = f"{geo_info.latitude}, {geo_info.longitude}"
-                ip_info['Address'] = geo_info.address
+    except Exception as e:
+        console.log(f"[bold red]Error retrieving ASN details: {e}[/bold red]")
 
-        # Save the IP information to a file
+    try:
+        # Get additional IP information from ipinfo.io
+        response = requests.get(f"https://ipinfo.io/{ip}/json")
+        if response.status_code == 200:
+            data = response.json()
+            ip_info.update({
+                'IP': data.get('ip'),
+                'Hostname': data.get('hostname'),
+                'City': data.get('city'),
+                'Region': data.get('region'),
+                'Country': data.get('country'),
+                'Location': data.get('loc'),
+                'Organization': data.get('org'),
+                'Postal': data.get('postal'),
+                'Timezone': data.get('timezone')
+            })
+
+    except Exception as e:
+        console.log(f"[bold red]Error retrieving ipinfo.io details: {e}[/bold red]")
+
+    # Save the IP information to a file with UTF-8 encoding
+    try:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = f"{ip}_ip_info_{timestamp}.txt"
-        with open(output_file, 'w') as file:
+        with open(output_file, 'w', encoding='utf-8') as file:
             for key, value in ip_info.items():
                 file.write(f"{key}: {value}\n")
 
         return ip_info, output_file
     except Exception as e:
-        console.log(f"[bold red]Error retrieving IP details: {e}[/bold red]")
-        return {}, None
+        console.log(f"[bold red]Error saving IP details to file: {e}[/bold red]")
+        return ip_info, None
 
 def display_results(results):
     for result in results:
         console.log(result)
+
+def check_url(url):
+    ua = UserAgent()
+    headers = {
+        'User-Agent': ua.random
+    }
+    try:
+        response = requests.head(url, headers=headers, allow_redirects=True, timeout=5)
+        if response.status_code == 200:
+            return True
+    except requests.RequestException:
+        return False
+    return False
+
+def tech_analysis(domain):
+    possible_urls = [
+        f"http://{domain}",
+        f"https://{domain}",
+        f"http://www.{domain}",
+        f"https://www.{domain}"
+    ]
+
+     # Validate URLs
+    valid_url = None
+    for url in possible_urls:
+        console.print(f"[+] Checking URL: {url}", style="bold cyan")
+        if check_url(url):
+            valid_url = url
+            break
+
+    if not valid_url:
+        console.print("[bold red]No valid URL found for analysis.[/bold red]")
+        return
+
+    # Create a Wappalyzer instance
+    wappalyzer = Wappalyzer.latest()
+
+    # Create a WebPage instance from the valid URL
+    console.print(f"[+] Analyzing website: {valid_url}", style="bold cyan")
+    webpage = WebPage.new_from_url(valid_url)
+
+    # Analyze the webpage and get the detected technologies
+    console.print("[+] Detecting technologies...", style="bold cyan")
+    technologies = wappalyzer.analyze(webpage)
+
+    # Generate timestamp and domain name
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    domain_name = urlparse(valid_url).netloc
+    
+    # Create output filename
+    filename = f"{domain_name}_tech_lookup_{timestamp}.txt"
+
+    # Save the results to a file
+    console.print(f"[+] Saving results to {filename}", style="bold cyan")
+    with open(filename, "w") as file:
+        file.write(f"Analysis of {valid_url} on {timestamp}\n\n")
+        for tech in technologies:
+            file.write(f"{tech}\n")
+
+    # Print the detected technologies in the console using rich
+    console.print(f"[+] Technologies detected for {valid_url}:", style="bold yellow")
+    for tech in technologies:
+        console.print(f"[+] {tech}", style="yellow")
+
+    console.print(f"[bold green]Analysis saved to {filename}[/bold green]")
 
 @click.command()
 @click.pass_context
@@ -249,6 +332,7 @@ def domain_insight(ctx):
         console.print("[yellow]4. Check robots.txt[/yellow]")
         console.print("[yellow]5. Check WHOIS record[/yellow]")
         console.print("[yellow]6. Get IP address details[/yellow]")
+        console.print("[yellow]7. Tech stack analysis[/yellow]")
         console.print("[red]0. Exit[/red]")
         console.print()
         
@@ -272,11 +356,7 @@ def domain_insight(ctx):
                 else:
                     console.print(f"[bold red]Failed to retrieve reverse IP lookup information.[/bold red]")
             elif choice == 2:
-                task = progress.add_task("Identifying subdomains...", total=None)
-                subdomains, output_file = find_subdomains(current_domain)
-                progress.update(task, completed=True)
-                console.log(f"Found {len(subdomains)} subdomains. Saved to {output_file}")
-                display_results([f"Subdomains:"] + [f" - {subdomain}" for subdomain in subdomains])
+                subdomains = find_subdomains(current_domain)
             elif choice == 3:
                 task = progress.add_task("Checking DNS records...", total=None)
                 dns_records, output_file = get_dns_records(current_domain)
@@ -308,6 +388,8 @@ def domain_insight(ctx):
                 display_results([f"{key}: {value}" for key, value in ip_details.items()])
                 if output_file:
                     console.print(f"[bold green]IP details saved to {output_file}[/bold green]")
+            elif choice == 7:
+                tech_analysis(current_domain)
             elif choice == 0:
                 current_domain = False
                 console.print("[bold red]Thank you for using Domain Insight![/bold red]")
