@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.progress import track
 from rich.prompt import Prompt
 from rich.progress import Progress
+from requests_html import HTMLSession
 
 console = Console()
 
@@ -56,11 +57,22 @@ def validate_proxy_and_user_agent(proxy, user_agent, url, proxy_mode):
 # Check indexing status using a proxy and user-agent
 def check_indexing_status(url, proxies=None, user_agent=None, captcha_service=None, captcha_key=None, rate_limit=0):
     query = f"site:{url}"
-    headers = {'User-Agent': user_agent} if user_agent else {}
+    headers = {
+        'User-Agent': user_agent or 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Referer': 'https://www.google.com/'
+    }
     search_url = f"https://www.google.com/search?q={query}"
 
     try:
-        response = requests.get(search_url, headers=headers, proxies=proxies, timeout=10)
+        session = HTMLSession()
+        response = session.get(search_url, headers=headers, proxies=proxies, timeout=10)
+        response.html.render(timeout=20)
+
         if "captcha" in response.text.lower():
             if captcha_service and captcha_key:
                 site_key = get_site_key(search_url)
@@ -68,27 +80,38 @@ def check_indexing_status(url, proxies=None, user_agent=None, captcha_service=No
                     captcha_solution = solve_captcha(captcha_service, captcha_key, search_url, site_key)
                     if captcha_solution:
                         headers['g-recaptcha-response'] = captcha_solution
-                        response = requests.get(search_url, headers=headers, proxies=proxies, timeout=10)
+                        response = session.get(search_url, headers=headers, proxies=proxies, timeout=10)
+                        response.html.render(timeout=20)
                         if "captcha" not in response.text.lower():
-                            return parse_indexing_status(response)
+                            return parse_indexing_status(response, url)
             return "Captcha Encountered"
         
-        return parse_indexing_status(response)
+        return parse_indexing_status(response, url)
     except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
         return f"Error: {e}"
     finally:
         if rate_limit > 0:
-            # console.print(f"[yellow]Applying rate limit: Waiting for {rate_limit} seconds...[/yellow]")
+            console.print(f"[yellow]Applying rate limit: Waiting for {rate_limit} seconds...[/yellow]")
             time.sleep(rate_limit)
 
-def parse_indexing_status(response):
-    soup = BeautifulSoup(response.text, 'html.parser')
-    results = soup.find_all('div', class_='g')
+def parse_indexing_status(response, url):
+    soup = BeautifulSoup(response.html.html, 'html.parser')
     
-    if results:
-        return "Indexed"
-    else:
+    # Check for "did not match any documents" message
+    no_results_message = soup.find("p", role="heading")
+    if no_results_message and "did not match any documents" in no_results_message.text.lower():
         return "Not Indexed"
+    
+    # Check for search results containing the URL
+    search_results = soup.find_all('div', class_='g')
+    if search_results:
+        for result in search_results:
+            link = result.find('a', href=True)
+            if link and url in link['href']:
+                return "Indexed"
+    
+    return "Not Indexed"
 
 def get_site_key(url):
     response = requests.get(url)
@@ -300,7 +323,7 @@ def index_spy(ctx):
 
             status = check_indexing_status(url, valid_proxies, current_user_agent, captcha_service, captcha_key, rate_limit)
             console.print(f"[cyan][+] URL: {url}[/cyan]")
-            console.print(f"[green][+] Indexing Status: {status}[/green]" if status == "Indexed" else f"[red]Indexing Status: {status}[/red]")
+            console.print(f"[green][+] Indexing Status: {status}[/green]" if status == "Indexed" else f"[red][-] Indexing Status: {status}[/red]")
         
         elif choice == 2:
             while True:

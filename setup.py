@@ -35,7 +35,9 @@ setup(
         'python-whois',
         'geopy',
         'fake-useragent',
-        'python-wappalyzer'
+        'python-wappalyzer',
+        'requests-html',
+        'lxml_html_clean'
     ],
     entry_points={
         'console_scripts': [
