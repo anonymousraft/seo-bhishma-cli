@@ -11,20 +11,23 @@ import sys
 from rich.console import Console
 from rich.progress import track
 from rich.prompt import Prompt
-from rich.progress import Progress
+from rich.progress import Progress, SpinnerColumn, TextColumn
 from requests_html import HTMLSession
+from browserforge.headers import HeaderGenerator
 
 console = Console()
+session = None
 
-# Load user agents from a file
-def load_user_agents(user_agent_file):
-    try:
-        with open(user_agent_file, 'r') as f:
-            user_agents = f.read().splitlines()
-        return user_agents
-    except FileNotFoundError:
-        console.print(f"[red][-] File not found: {user_agent_file}. Please enter a valid file path.[/red]")
-        return None
+def generate_headers():
+    headers_object = HeaderGenerator(
+        browser=('chrome', 'firefox', 'safari', 'edge'),
+        os=('windows', 'macos', 'linux', 'android', 'ios'),
+        device=('desktop', 'mobile'),
+        locale=('en-US', 'en', 'de'),
+        http_version=2
+        )
+    headers = headers_object.generate()
+    return headers
 
 # Load proxies from a file
 def load_proxies(proxy_file):
@@ -37,12 +40,18 @@ def load_proxies(proxy_file):
         return None
 
 # Validate proxy and user agent by making a search request
-def validate_proxy_and_user_agent(proxy, user_agent, url, proxy_mode):
-    headers = {'User-Agent': user_agent} if user_agent else {}
+def validate_proxy(proxy, url, proxy_mode):
+    global session
+    if session is None:
+        session = HTMLSession()
+
+    headers = headers = generate_headers()
+
     for protocol in proxy_mode:
         proxies = {protocol: f"{protocol}://{proxy}"}
         try:
-            response = requests.get(url, headers=headers, proxies=proxies, timeout=10)
+            response = session.get(url, headers=headers, proxies=proxies, timeout=10)
+            response.html.render(timeout=20)
             if response.status_code == 200 and "captcha" not in response.text.lower():
                 return proxies
             elif response.status_code == 429:
@@ -55,21 +64,16 @@ def validate_proxy_and_user_agent(proxy, user_agent, url, proxy_mode):
     return None
 
 # Check indexing status using a proxy and user-agent
-def check_indexing_status(url, proxies=None, user_agent=None, captcha_service=None, captcha_key=None, rate_limit=0):
+def check_indexing_status(url, proxies=None, captcha_service=None, captcha_key=None, rate_limit=0):
+    global session
+    if session is None:
+        session = HTMLSession()
+
     query = f"site:{url}"
-    headers = {
-        'User-Agent': user_agent or 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-        'Referer': 'https://www.google.com/'
-    }
+    headers = generate_headers()
     search_url = f"https://www.google.com/search?q={query}"
 
     try:
-        session = HTMLSession()
         response = session.get(search_url, headers=headers, proxies=proxies, timeout=10)
         response.html.render(timeout=20)
 
@@ -85,14 +89,13 @@ def check_indexing_status(url, proxies=None, user_agent=None, captcha_service=No
                         if "captcha" not in response.text.lower():
                             return parse_indexing_status(response, url)
             return "Captcha Encountered"
-        
+
         return parse_indexing_status(response, url)
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         return f"Error: {e}"
     finally:
         if rate_limit > 0:
-            console.print(f"[yellow]Applying rate limit: Waiting for {rate_limit} seconds...[/yellow]")
             time.sleep(rate_limit)
 
 def parse_indexing_status(response, url):
@@ -258,18 +261,8 @@ def index_spy(ctx):
         elif proxy_mode_choice.lower() == 'socks4':
             proxy_mode = ['socks4']
         elif proxy_mode_choice.lower() == 'socks5':
-            proxy_mode = ['socks5']
-        
-    use_user_agent = Prompt.ask("[cyan]Do you want to randomize user agents?[/cyan]", default="no").lower() == "yes"
-    user_agents = None
-    current_user_agent = None
-    if use_user_agent:
-        while True:
-            user_agent_file = Prompt.ask("[cyan]Enter the path to the user agent file[/cyan]")
-            user_agents = load_user_agents(user_agent_file)
-            if user_agents:
-                break
-    
+            proxy_mode = ['socks5']        
+
     use_captcha_service = Prompt.ask("[cyan]Do you want to use a paid captcha solving service?[/cyan]", default="no").lower() == "yes"
     captcha_service = None
     captcha_key = None
@@ -306,24 +299,26 @@ def index_spy(ctx):
 
         if choice == 1:
             url = Prompt.ask("[cyan]Enter the URL to check indexing status[/cyan]")
-            if use_proxy or use_user_agent:
+            # if use_proxy or use_user_agent:
+            if use_proxy:
                 while not validated:
                     proxy = next(proxies) if use_proxy else None
-                    user_agent = random.choice(user_agents) if use_user_agent else None
-                    valid_proxies = validate_proxy_and_user_agent(proxy, user_agent, f"https://www.google.com/search?q=site:{url}", proxy_mode)
+                    query = f"https://www.google.com/search?q=site:{url}"
+                    valid_proxies = validate_proxy(proxy, query, proxy_mode)
                     if valid_proxies:
                         current_proxy = proxy
-                        current_user_agent = user_agent
                         console.print(f"[blue][+] Using Proxy: {current_proxy}[/blue]")
-                        if use_user_agent:
-                            console.print(f"[blue][+] Using User-Agent: {current_user_agent}[/blue]")
                         validated = True
                     else:
                         console.print(f"[red][-] Proxy {proxy} is not valid. Retrying...[/red]")
 
-            status = check_indexing_status(url, valid_proxies, current_user_agent, captcha_service, captcha_key, rate_limit)
-            console.print(f"[cyan][+] URL: {url}[/cyan]")
-            console.print(f"[green][+] Indexing Status: {status}[/green]" if status == "Indexed" else f"[red][-] Indexing Status: {status}[/red]")
+            with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
+                task = progress.add_task("Checking indexing status...", total=None)
+                status = check_indexing_status(url, valid_proxies, captcha_service, captcha_key, rate_limit)
+                progress.update(task, completed=True)
+
+                console.print(f"[cyan][+] URL: {url}[/cyan]")
+                console.print(f"[green][+] Indexing Status: {status}[/green]" if status == "Indexed" else f"[red][-] Indexing Status: {status}[/red]")
         
         elif choice == 2:
             while True:
@@ -341,70 +336,57 @@ def index_spy(ctx):
             proxy_failure_count = 0
             captcha_failure_count = 0
 
+
             for index in track(range(len(data)), description="[+] Processing URLs"):
                 url = data.loc[index, 'url']
-                if use_proxy or use_user_agent:
+                # if use_proxy or use_user_agent:
+                if use_proxy:
                     retries = 0
                     while not validated and retries < 5:
                         proxy = next(proxies) if use_proxy else None
-                        user_agent = random.choice(user_agents) if use_user_agent else None
-                        valid_proxies = validate_proxy_and_user_agent(proxy, user_agent, f"https://www.google.com/search?q=site:{url}", proxy_mode)
+                        valid_proxies = validate_proxy(proxy, f"https://www.google.com/search?q=site:{url}", proxy_mode)
                         if valid_proxies:
                             current_proxy = proxy
-                            current_user_agent = user_agent
-                            console.print(f"[blue][+] Using Proxy: {current_proxy}[/blue]")
-                            if use_user_agent:
-                                console.print(f"[blue][+] Using User-Agent: {current_user_agent}[/blue]")
+                            console.print(f"\n[blue][+] Using Proxy: {current_proxy}[/blue]")
                             validated = True
                         else:
                             console.print(f"[red][-] Proxy {proxy} is not valid. Retrying...[/red]")
                             retries += 1
-                    if retries >= 5:
-                        console.print("[red bold][-] Too many retries with proxies and user agents. Saving progress and aborting...[/red bold]")
+                    if retries >= 20:
+                        console.print("[red bold][-] Too many retries with proxies. Saving progress and aborting...[/red bold]")
                         save_progress(results, output_file)
                         return
 
-                status = check_indexing_status(url, valid_proxies, current_user_agent, captcha_service, captcha_key, rate_limit)
+                status = check_indexing_status(url, valid_proxies, captcha_service, captcha_key, rate_limit)
                 
                 if "Captcha Encountered" in status:
                     captcha_failure_count += 1
-                    if use_user_agent:
-                        console.print("[red][-] Captcha encountered! Changing user agent.[/red]")
-                        time.sleep(2)
-                        current_user_agent = random.choice(user_agents)
-                        console.print(f"[blue][+] Using User-Agent: {current_user_agent}[/blue]")
-                        status = check_indexing_status(url, valid_proxies, current_user_agent, captcha_service, captcha_key, rate_limit)
-                    if "Captcha Encountered" in status and use_proxy:
-                        console.print("[red][-] Captcha encountered again! Changing proxy and user agent.[/red]")
-                        time.sleep(2)
-                        validated = False
-                        retries = 0
-                        while not validated and retries < 5:
-                            proxy = next(proxies)
-                            user_agent = random.choice(user_agents) if user_agents else None
-                            valid_proxies = validate_proxy_and_user_agent(proxy, user_agent, f"https://www.google.com/search?q=site:{url}", proxy_mode)
-                            if valid_proxies:
-                                current_proxy = proxy
-                                current_user_agent = user_agent
-                                console.print(f"[blue][+] Using Proxy: {current_proxy}[/blue]")
-                                if use_user_agent:
-                                    console.print(f"[blue][+] Using User-Agent: {current_user_agent}[/blue]")
-                                validated = True
-                            else:
-                                console.print(f"[red][-] Proxy {proxy} is not valid. Retrying...[/red]")
-                                retries += 1
-                            if retries >= 5:
-                                console.print("[red bold][-] Too many retries with proxies and user agents. Saving progress and aborting...[/red bold]")
-                                save_progress(results, output_file)
-                                return
+                    console.print("[red][-] Captcha encountered! Changing proxy.[/red]")
+                    time.sleep(2)
+                    validated = False
+                    retries = 0
+                    while not validated and retries < 5:
+                        proxy = next(proxies)
+                        valid_proxies = validate_proxy(proxy, f"https://www.google.com/search?q=site:{url}", proxy_mode)
+                        if valid_proxies:
+                            current_proxy = proxy
+                            console.print(f"[blue][+] Using Proxy: {current_proxy}[/blue]")
+                            validated = True
+                        else:
+                            console.print(f"[red][-] Proxy {proxy} is not valid. Retrying...[/red]")
+                            retries += 1
+                        if retries >= 20:
+                            console.print("[red bold][-] Too many retries with proxies and user agents. Saving progress and aborting...[/red bold]")
+                            save_progress(results, output_file)
+                            return
 
-                        status = check_indexing_status(url, valid_proxies, current_user_agent, captcha_service, captcha_key, rate_limit)
-                    
+                    status = check_indexing_status(url, valid_proxies, captcha_service, captcha_key, rate_limit)
+                
                 if captcha_failure_count >= 3 and not use_proxy:
                     console.print("[red][-] Too many captcha encounters. Waiting for 5 minutes...[/red]")
                     time.sleep(300)
                     captcha_failure_count = 0
-                    status = check_indexing_status(url, valid_proxies, current_user_agent, captcha_service, captcha_key, rate_limit)
+                    status = check_indexing_status(url, valid_proxies, captcha_service, captcha_key, rate_limit)
                     if "Captcha Encountered" in status:
                         console.print("[red][-] Captcha issue persists. Saving progress and exiting...[/red]")
                         save_progress(results, output_file)
@@ -413,8 +395,7 @@ def index_spy(ctx):
                 results.append({
                     'url': url,
                     'indexing_status': status,
-                    'proxy': current_proxy,
-                    'user_agent': current_user_agent
+                    'proxy': current_proxy
                 })
 
             save_progress(results, output_file)

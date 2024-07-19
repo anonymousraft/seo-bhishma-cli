@@ -37,7 +37,8 @@ setup(
         'fake-useragent',
         'python-wappalyzer',
         'requests-html',
-        'lxml_html_clean'
+        'lxml_html_clean',
+        'browserforge'
     ],
     entry_points={
         'console_scripts': [

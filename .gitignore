@@ -15,6 +15,7 @@ gsc_data/
 *_whois_*.txt
 *_ip_info_*.txt
 *_tech_lookup_*.txt
+proxies.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
