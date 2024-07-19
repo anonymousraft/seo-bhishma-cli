@@ -3,7 +3,6 @@ import requests
 import dns.resolver
 import whois
 import click
-import subprocess
 import datetime
 import re
 import sublist3r
@@ -15,15 +14,29 @@ from fake_useragent import UserAgent
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from Wappalyzer import Wappalyzer, WebPage
+from requests_html import HTMLSession
+from browserforge.headers import HeaderGenerator
 
 # Initialize rich console
 console = Console()
 geolocator = Nominatim(user_agent="domain_insight")
+session = None
 
 ua = UserAgent()
 
 # Global variable to store the domain for the session
 current_domain = None
+
+def generate_headers():
+    headers_object = HeaderGenerator(
+        browser=('chrome', 'firefox', 'safari', 'edge'),
+        os=('windows', 'macos', 'linux', 'android', 'ios'),
+        device=('desktop', 'mobile'),
+        locale=('en-US', 'en', 'in'),
+        http_version=2
+        )
+    headers = headers_object.generate()
+    return headers
 
 def is_valid_domain_or_url(input_string):
     domain_regex = re.compile(
@@ -63,14 +76,14 @@ def get_ip_address(domain):
         return None
 
 def reverse_ip_lookup(ip, domain):
+    global session
+    if session is None:
+        session = HTMLSession()
     try:
-        headers = {
-            "User-Agent": ua.random,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Connection": "keep-alive"
-        }
-        response = requests.get(f"https://domains.tntcode.com/ip/{ip}", headers=headers)
+        headers = generate_headers()
+        query = f"https://domains.tntcode.com/ip/{ip}"
+        response = session.get(query, headers=headers)
+        response.html.render(timeout=20)
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, 'html.parser')
             
@@ -142,26 +155,29 @@ def get_dns_records(domain):
         return {}, None
 
 def check_robots_txt(domain):
-    robots_urls = [
-        f"http://{domain}/robots.txt",
-        f"https://{domain}/robots.txt",
-        f"http://www.{domain}/robots.txt",
-        f"https://www.{domain}/robots.txt"
-    ]
+    global session
+    if session is None:
+        session = HTMLSession()
+
+    valid_url = None
+    # robots_urls = [
+    #     f"http://{domain}/robots.txt",
+    #     f"https://{domain}/robots.txt",
+    #     f"http://www.{domain}/robots.txt",
+    #     f"https://www.{domain}/robots.txt"
+    # ]
+    url = f"https://{domain}/robots.txt"
     disallows = []
-    for url in robots_urls:
-        try:
-            headers = {
-                "User-Agent": ua.random,
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Connection": "keep-alive"
-            }
-            response = requests.get(url, headers=headers)
-            if response.status_code == 200:
-                disallows += [line for line in response.text.splitlines() if line.startswith('Disallow')]
-        except Exception as e:
-            console.log(f"[bold red][-] Error retrieving robots.txt from {url}: {e}[/bold red]")
+    #for url in robots_urls:
+    try:
+        headers = generate_headers()
+        response = session.get(url, headers=headers, allow_redirects=True , timeout=10)
+        response.html.render(timeout=20)
+        if response.status_code == 200:
+            disallows += [line for line in response.text.splitlines() if line.startswith('Disallow')]
+    except Exception as e:
+        console.log(f"[bold red][-] Error retrieving robots.txt from {url}: {e}[/bold red]")    
+    
     return disallows
 
 def format_whois_info(info):
@@ -247,12 +263,14 @@ def display_results(results):
         console.log(result)
 
 def check_url(url):
-    ua = UserAgent()
-    headers = {
-        'User-Agent': ua.random
-    }
+    global session
+    if session is None:
+        session = HTMLSession()   
+
+    headers = generate_headers()
     try:
-        response = requests.head(url, headers=headers, allow_redirects=True, timeout=5)
+        response = session.get(url, headers=headers, timeout=10)
+        response.html.render(timeout=20)
         if response.status_code == 200:
             return True
     except requests.RequestException:
@@ -359,13 +377,13 @@ def domain_insight(ctx):
             elif choice == 2:
                 subdomains = find_subdomains(current_domain)
             elif choice == 3:
-                task = progress.add_task("[+] Checking DNS records...", total=None)
+                task = progress.add_task("Checking DNS records...", total=None)
                 dns_records, output_file = get_dns_records(current_domain)
                 progress.update(task, completed=True)
                 console.log(f"[+] DNS records saved to {output_file}")
                 display_results([f"{record_type}: {', '.join(records)}" for record_type, records in dns_records.items()])
             elif choice == 4:
-                task = progress.add_task("[+] Checking robots.txt...", total=None)
+                task = progress.add_task("Checking robots.txt...", total=None)
                 robots_txt = check_robots_txt(current_domain)
                 progress.update(task, completed=True)
                 if robots_txt:
@@ -373,7 +391,7 @@ def domain_insight(ctx):
                 else:
                     console.print("[bold red][-] robots.txt not found on any of the checked URLs.[/bold red]")
             elif choice == 5:
-                task = progress.add_task("[+] Checking WHOIS record...", total=None)
+                task = progress.add_task("Checking WHOIS record...", total=None)
                 whois_info, output_file = get_whois_info(current_domain)
                 progress.update(task, completed=True)
                 if whois_info:
@@ -382,7 +400,7 @@ def domain_insight(ctx):
                 else:
                     console.print(f"[bold red][-] Failed to retrieve WHOIS information.[/bold red]")
             elif choice == 6:
-                task = progress.add_task("[+] Getting IP address details...", total=None)
+                task = progress.add_task("Getting IP address details...", total=None)
                 ip = get_ip_address(current_domain)
                 ip_details, output_file = get_ip_details(ip, current_domain) if ip else ({}, None)
                 progress.update(task, completed=True)
