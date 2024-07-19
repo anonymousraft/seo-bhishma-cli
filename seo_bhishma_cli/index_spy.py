@@ -317,7 +317,7 @@ def index_spy(ctx):
                 status = check_indexing_status(url, valid_proxies, captcha_service, captcha_key, rate_limit)
                 progress.update(task, completed=True)
 
-                console.print(f"[cyan][+] URL: {url}[/cyan]")
+                console.print(f"[cyan]\n[+] URL: {url}[/cyan]")
                 console.print(f"[green][+] Indexing Status: {status}[/green]" if status == "Indexed" else f"[red][-] Indexing Status: {status}[/red]")
         
         elif choice == 2:
