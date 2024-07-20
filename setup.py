@@ -15,7 +15,7 @@ def read_readme():
 
 setup(
     name='seo-bhishma-cli',
-    version='1.4.2',
+    version='1.4.3',
     author='Hitendra Rathore',
     author_email='hitendra1995@mail.com',
     description='A CLI tool for SEO tasks',

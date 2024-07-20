@@ -78,7 +78,7 @@ You will see the following menu:
                                                        
 
 Welcome to SEO Bhishma!
-Version: 1.4.2
+Version: 1.4.3
 Author: @hi7endra
 
 This tool is my way of giving back to the community.
