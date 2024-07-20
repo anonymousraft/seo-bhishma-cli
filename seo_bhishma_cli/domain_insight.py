@@ -16,6 +16,13 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from Wappalyzer import Wappalyzer, WebPage
 from requests_html import HTMLSession
 from browserforge.headers import HeaderGenerator
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.common.exceptions import WebDriverException
 
 # Initialize rich console
 console = Console()
@@ -75,54 +82,114 @@ def get_ip_address(domain):
         console.log(f"[bold red][-] Error retrieving IP address for {domain}: {e}[/bold red]")
         return None
 
-def reverse_ip_lookup(ip, domain):
-    global session
-    if session is None:
-        session = HTMLSession()
-    try:
-        headers = generate_headers()
-        query = f"https://domains.tntcode.com/ip/{ip}"
-        response = session.get(query, headers=headers)
-        response.html.render(timeout=20)
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # Extracting the H1 title
-            h1_title = soup.find('h1').get_text()
+# REVERSE IP STATRS
+def parse_page(page_source):
+    soup = BeautifulSoup(page_source, 'html.parser')
+    h1_title = soup.find('h1').get_text() if soup.find('h1') else 'No title found'
+    table = soup.find('table')
+    table_info = {}
 
-            # Extracting table information
-            table = soup.find('table')
-            table_rows = table.find_all('tr')
-            table_info = {}
-            for row in table_rows:
-                cols = row.find_all('td')
+    if table:
+        table_rows = table.find_all('tr')
+        for row in table_rows:
+            cols = row.find_all('td')
+            if len(cols) >= 2:
                 key = cols[0].get_text().strip()
                 value = cols[1].get_text().strip()
                 table_info[key] = value
+    else:
+        console.log("[bold red]No table found on the page[/bold red]")
+        return None, None, None  # Return None if the table is not found
 
-            # Extracting the domains list from textarea
-            textarea = soup.find('textarea')
-            domains_list = textarea.get_text().strip().split('\n')
+    textarea = soup.find('textarea')
+    domains_list = textarea.get_text().strip().split('\n') if textarea else []
 
-            # Save the reverse IP lookup results to a file
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_file = f"{domain}_reverse_ip_{timestamp}.txt"
-            with open(output_file, 'w', encoding='utf-8') as file:
-                file.write(f"Title: {h1_title}\n\n")
-                file.write("Table Information:\n")
-                for key, value in table_info.items():
-                    file.write(f"{key}: {value}\n")
-                file.write("\nDomains List:\n")
-                for domain in domains_list:
-                    file.write(f"{domain}\n")
+    return h1_title, table_info, domains_list
 
-            return h1_title, table_info, domains_list, output_file
-        else:
-            console.log(f"[bold red][-] Error performing reverse IP lookup: {response.status_code}[/bold red]")
+def save_reverse_ip_results(domain, h1_title, table_info, domains_list):
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_file = f"{domain}_reverse_ip_{timestamp}.txt"
+    with open(output_file, 'w', encoding='utf-8') as file:
+        file.write(f"Title: {h1_title}\n\n")
+        file.write("Table Information:\n")
+        for key, value in table_info.items():
+            file.write(f"{key}: {value}\n")
+        file.write("\nDomains List:\n")
+        for domain in domains_list:
+            file.write(f"{domain}\n")
+    return output_file
+
+def scrape_with_selenium(ip):
+    options = webdriver.ChromeOptions()
+    # Do not add headless option to see the browser and solve CAPTCHA manually
+    options.add_argument("--disable-gpu")  # Disable GPU acceleration
+    
+    # Use ChromeDriverManager to get the path to the ChromeDriver
+    service = ChromeService(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=options)
+    
+    query = f"https://domains.tntcode.com/ip/{ip}"
+    driver.get(query)
+
+    # Loop until CAPTCHA is solved and the table is found or another condition is met
+    while True:
+        try:
+            if driver.title == "Captcha":
+                console.log("[bold yellow]CAPTCHA detected. Please solve the CAPTCHA in the browser.[/bold yellow]")
+                while driver.title == "Captcha":
+                    try:
+                        WebDriverWait(driver, 10).until(
+                            EC.presence_of_element_located((By.TAG_NAME, "body"))
+                        )
+                    except WebDriverException:
+                        console.log("[bold red]Browser window closed by the user.[/bold red]")
+                        driver.quit()
+                        return None
+            WebDriverWait(driver, 20).until(
+                EC.presence_of_element_located((By.TAG_NAME, "table"))
+            )
+            break
+        except:
+            console.log("[bold yellow]Waiting for CAPTCHA to be solved or for the content to be available...[/bold yellow]")
+            page_source = driver.page_source
+            if "not found" in page_source.lower():
+                console.log("[bold red]Content not found[/bold red]")
+                driver.quit()
+                return page_source
+            if "verifying you are human" not in page_source.lower():
+                break
+            # Wait a bit before trying again
+            WebDriverWait(driver, 20).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            )
+
+    page_source = driver.page_source
+    driver.quit()
+    return page_source
+
+def reverse_ip_lookup(ip, domain):
+    try:
+        console.log("[bold green]Starting reverse IP lookup...[/bold green]")
+        page_source = scrape_with_selenium(ip)
+
+        if page_source is None or "not found" in page_source.lower():
+            console.log("[bold red]Content not found on the page[/bold red]")
             return None, None, None, None
+
+        h1_title, table_info, domains_list = parse_page(page_source)
+        if h1_title is None or table_info is None or domains_list is None:
+            console.log("[bold red]Reverse IP lookup failed. No table found on the page.[/bold red]")
+            return None, None, None, None
+
+        output_file = save_reverse_ip_results(domain, h1_title, table_info, domains_list)
+
+        console.log("[bold green]Reverse IP lookup completed successfully.[/bold green]")
+        return h1_title, table_info, domains_list, output_file
     except Exception as e:
-        console.log(f"[bold red][-] Error performing reverse IP lookup: {e}[/bold red]")
+        console.log(f"[bold red]Error performing reverse IP lookup: {e}[/bold red]")
         return None, None, None, None
+    
+# REVERSE IP ENDS
 
 def find_subdomains(domain):
     try:
@@ -156,28 +223,34 @@ def get_dns_records(domain):
 
 def check_robots_txt(domain):
     global session
+
     if session is None:
         session = HTMLSession()
 
-    valid_url = None
-    # robots_urls = [
-    #     f"http://{domain}/robots.txt",
-    #     f"https://{domain}/robots.txt",
-    #     f"http://www.{domain}/robots.txt",
-    #     f"https://www.{domain}/robots.txt"
-    # ]
-    url = f"https://{domain}/robots.txt"
+    robots_urls = [
+        f"https://{domain}/robots.txt",
+        f"http://{domain}/robots.txt",
+        f"https://www.{domain}/robots.txt",
+        f"http://www.{domain}/robots.txt"
+    ]
+
     disallows = []
-    #for url in robots_urls:
-    try:
-        headers = generate_headers()
-        response = session.get(url, headers=headers, allow_redirects=True , timeout=10)
-        response.html.render(timeout=20)
-        if response.status_code == 200:
-            disallows += [line for line in response.text.splitlines() if line.startswith('Disallow')]
-    except Exception as e:
-        console.log(f"[bold red][-] Error retrieving robots.txt from {url}: {e}[/bold red]")    
-    
+    for url in robots_urls:
+        try:
+            headers = generate_headers()
+            response = session.get(url, headers=headers, allow_redirects=True, timeout=10)
+            if response.status_code == 200 and 'User-agent' in response.text:
+                disallows = [line for line in response.text.splitlines() if line.startswith('Disallow')]
+                console.print(f"[bold green][+] Found valid robots.txt at {url}[/bold green]")
+                break
+            else:
+                console.print(f"[bold yellow][!] Invalid robots.txt at {url} (User-agent not found or other issue)[/bold yellow]")
+        except Exception as e:
+            console.print(f"[bold red][-] Error retrieving robots.txt from {url}: {e}[/bold red]")
+
+    if not disallows:
+        console.print(f"[bold yellow][!] No valid robots.txt found for domain: {domain}[/bold yellow]")
+
     return disallows
 
 def format_whois_info(info):
@@ -262,40 +335,10 @@ def display_results(results):
     for result in results:
         console.log(result)
 
-def check_url(url):
-    global session
-    if session is None:
-        session = HTMLSession()   
-
-    headers = generate_headers()
-    try:
-        response = session.get(url, headers=headers, timeout=10)
-        response.html.render(timeout=20)
-        if response.status_code == 200:
-            return True
-    except requests.RequestException:
-        return False
-    return False
-
 def tech_analysis(domain):
-    possible_urls = [
-        f"http://{domain}",
-        f"https://{domain}",
-        f"http://www.{domain}",
-        f"https://www.{domain}"
-    ]
 
      # Validate URLs
-    valid_url = None
-    for url in possible_urls:
-        console.print(f"[+] Checking URL: {url}", style="bold cyan")
-        if check_url(url):
-            valid_url = url
-            break
-
-    if not valid_url:
-        console.print("[bold red]No valid URL found for analysis.[/bold red]")
-        return
+    valid_url = f"https://{domain}"
 
     # Create a Wappalyzer instance
     wappalyzer = Wappalyzer.latest()

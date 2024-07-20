@@ -1,5 +1,12 @@
-from setuptools.command.install import install
 from setuptools import setup, find_packages
+import os
+
+def read_requirements():
+    req_file_path = os.path.join(os.path.dirname(__file__), 'requirements.txt')
+    with open(req_file_path, 'r', encoding='utf-8', newline='') as req_file:
+        requirements = req_file.read().splitlines()
+        requirements = [req.strip() for req in requirements if req.strip() and not req.startswith('#')]
+        return requirements
 
 setup(
     name='seo-bhishma-cli',
@@ -12,34 +19,7 @@ setup(
     url='https://github.com/anonymousraft/seo-bhishma-cli.git',
     packages=find_packages(),
     include_package_data=True,
-    install_requires=[
-        'click',
-        'requests',
-        'pandas',
-        'tqdm',
-        'beautifulsoup4',
-        'art',
-        'lxml',
-        'scikit-learn',
-        'openai',
-        'pyyaml',
-        'rich',
-        'google-auth',
-        'google-auth-oauthlib',
-        'google-api-python-client',
-        'numpy',
-        'spacy',
-        'dnspython',
-        'ipwhois',
-        'sublist3r',
-        'python-whois',
-        'geopy',
-        'fake-useragent',
-        'python-wappalyzer',
-        'requests-html',
-        'lxml_html_clean',
-        'browserforge'
-    ],
+    install_requires=read_requirements(),
     entry_points={
         'console_scripts': [
             'seo-bhishma-cli=seo_bhishma_cli.cli:cli',
