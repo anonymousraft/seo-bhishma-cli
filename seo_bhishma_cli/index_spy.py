@@ -273,7 +273,7 @@ def check_indexing_status_selenium(url, proxy=None, captcha_handling_choice=None
         time.sleep(5)
 
         if "captcha" in driver.page_source.lower():
-            if not headless and captcha_handling_choice == 'Wait for user to solve':
+            if not headless and captcha_handling_choice == 'By user':
                 console.print("[yellow][-] Captcha encountered! Please solve the captcha in the browser window.[/yellow]")
                 while "captcha" in driver.page_source.lower():
                     try:
@@ -462,8 +462,8 @@ def index_spy(ctx):
             if method_choice == 'Selenium' and not headless:
                 captcha_handling_choice = Prompt.ask(
                     "[cyan]How do you want to handle captchas?[/cyan]",
-                    choices=['Wait for user to solve', 'Wait for 60 seconds'],
-                    default='Wait for user to solve'
+                    choices=['By user', 'Automatic'],
+                    default='By user'
                 )
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -514,7 +514,7 @@ def index_spy(ctx):
                         status = check_indexing_status_selenium(url, captcha_handling_choice=captcha_handling_choice, headless=headless)
 
                 if "Captcha Encountered" in status:
-                    if use_proxy and not (method_choice == 'Selenium' and captcha_handling_choice == 'Wait for user to solve'):
+                    if use_proxy and not (method_choice == 'Selenium' and captcha_handling_choice == 'By user'):
                         captcha_failure_count += 1
                         console.print("[red][-] Captcha encountered! Changing proxy.[/red]")
                         start_index = index
@@ -542,7 +542,7 @@ def index_spy(ctx):
                                 return
                     else:
                         captcha_failure_count += 1
-                        if method_choice == 'HTMLSession' or (method_choice == 'Selenium' and captcha_handling_choice == 'Wait for 60 seconds'):
+                        if method_choice == 'HTMLSession' or (method_choice == 'Selenium' and captcha_handling_choice == 'Automatic'):
                             console.print("[red][-] Captcha encountered! Applying Sleep for 20 seconds[/red]")
                             time.sleep(20)
                             if method_choice == 'HTMLSession':
@@ -550,7 +550,7 @@ def index_spy(ctx):
                             else:
                                 status = check_indexing_status_selenium(url, captcha_handling_choice=captcha_handling_choice, headless=headless)
 
-                if captcha_failure_count >= 3 and not use_proxy and not (method_choice == 'Selenium' and captcha_handling_choice == 'Wait for user to solve'):
+                if captcha_failure_count >= 3 and not use_proxy and not (method_choice == 'Selenium' and captcha_handling_choice == 'By user'):
                     console.print("[red][-] Too many captcha encounters. Saving progress and exiting...[/red]")
                     save_progress(results, output_file)
                     return
