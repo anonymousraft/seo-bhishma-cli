@@ -137,7 +137,7 @@ def fetch_search_analytics(service, site_url, start_date, end_date, dimensions, 
                     break
                 data.extend(rows)
                 total_rows_fetched += len(rows)
-                console.log(f"[green][+] {total_rows_fetched} rows fetched so far...[/green]")
+                # console.log(f"[green][+] {total_rows_fetched} rows fetched so far...[/green]")
                 progress_bar.update(task, advance=len(rows))
                 request['startRow'] = len(data)  # Continue fetching rows
                 time.sleep(1)  # To respect rate limits
@@ -150,6 +150,7 @@ def fetch_search_analytics(service, site_url, start_date, end_date, dimensions, 
     if not data:
         console.print("[red][-] No data fetched. Please check your query parameters and try again.[/red]")
     else:
+        console.log(f"[green][+] {total_rows_fetched} rows fetched.[/green]")
         save_gsc_data(site_url, {'rows': data}, dimensions, 'search_analytics')
     return data
 
@@ -216,7 +217,7 @@ def gsc_probe(ctx):
         console.print("[green][+] Available sites in your GSC account:[/green]")
         site_entries = site_list.get('siteEntry', [])
         for index, site in enumerate(site_entries, start=1):
-            console.print(f"[cyan][+] {index}.[/cyan] {site['siteUrl']}")
+            console.print(f"[cyan]{index}.[/cyan] {site['siteUrl']}")
 
         site_choice = click.prompt(click.style("Enter the number of the site you want to select (or type 'exit' to quit)", fg="magenta"))
         if site_choice.lower() == 'exit':
