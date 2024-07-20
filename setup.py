@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 import os
 
 def read_requirements():
-    req_file_path = os.path.join(os.path.dirname(__file__), 'requirements.txt')
+    req_file_path = 'requirements.txt'
     with open(req_file_path, 'r', encoding='utf-8', newline='') as req_file:
         requirements = req_file.read().splitlines()
         requirements = [req.strip() for req in requirements if req.strip() and not req.startswith('#')]
