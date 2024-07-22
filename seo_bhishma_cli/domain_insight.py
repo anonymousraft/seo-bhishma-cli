@@ -1,9 +1,14 @@
+import os
+import requests
+import gzip
+import pandas as pd
 import socket
 import requests
 import dns.resolver
 import whois
 import click
 import datetime
+import time
 import re
 import sublist3r
 from urllib.parse import urlparse
@@ -12,17 +17,19 @@ from ipwhois import IPWhois
 from geopy.geocoders import Nominatim
 from fake_useragent import UserAgent
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, track
 from Wappalyzer import Wappalyzer, WebPage
 from requests_html import HTMLSession
 from browserforge.headers import HeaderGenerator
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import WebDriverException
+from tempfile import NamedTemporaryFile
 
 # Initialize rich console
 console = Console()
@@ -221,11 +228,12 @@ def get_dns_records(domain):
         console.log(f"[bold red][-] Error retrieving DNS records: {e}[/bold red]")
         return {}, None
 
-def check_robots_txt(domain):
-    global session
-
-    if session is None:
-        session = HTMLSession()
+# ROBOTS TESTING
+def fetch_robots_txt_with_selenium(domain):
+    options = Options()
+    options.headless = True
+    service = ChromeService(executable_path=ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=options)
 
     robots_urls = [
         f"https://{domain}/robots.txt",
@@ -234,24 +242,117 @@ def check_robots_txt(domain):
         f"http://www.{domain}/robots.txt"
     ]
 
-    disallows = []
     for url in robots_urls:
         try:
-            headers = generate_headers()
-            response = session.get(url, headers=headers, allow_redirects=True, timeout=10)
-            if response.status_code == 200 and 'User-agent' in response.text:
-                disallows = [line for line in response.text.splitlines() if line.startswith('Disallow')]
-                console.print(f"[bold green][+] Found valid robots.txt at {url}[/bold green]")
-                break
-            else:
-                console.print(f"[bold yellow][!] Invalid robots.txt at {url} (User-agent not found or other issue)[/bold yellow]")
+            driver.get(url)
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "pre")))
+            robots_txt = driver.find_element(By.TAG_NAME, "pre").text
+            if robots_txt:
+                console.log(f"[bold green][+] Found robots.txt at {url}[/bold green]")
+                driver.quit()
+                return robots_txt
         except Exception as e:
-            console.print(f"[bold red][-] Error retrieving robots.txt from {url}: {e}[/bold red]")
+            console.log(f"[bold red][-] Error fetching robots.txt from {url} using Selenium: {e}[/bold red]")
+    driver.quit()
+    return None
 
-    if not disallows:
-        console.print(f"[bold yellow][!] No valid robots.txt found for domain: {domain}[/bold yellow]")
+def parse_robots_txt(robots_txt):
+    disallows = []
+    sitemaps = []
+    for line in robots_txt.splitlines():
+        if line.startswith('Disallow'):
+            disallows.append(line.split(': ')[1])
+        elif line.startswith('Sitemap'):
+            sitemaps.append(line.split(': ')[1])
+    return disallows, sitemaps
 
-    return disallows
+def download_sitemap(sitemap_url, retries=3, delay=5):
+    attempt = 0
+    while attempt < retries:
+        try:
+            console.log(f"[bold blue][*] Downloading sitemap from {sitemap_url} (Attempt {attempt + 1})[/bold blue]")
+            response = requests.get(sitemap_url, headers=generate_headers(), timeout=10)
+            if response.status_code == 200:
+                with NamedTemporaryFile(delete=False, suffix='.xml' if not sitemap_url.endswith('.gz') else '.xml.gz') as temp_file:
+                    temp_file.write(response.content)
+                    temp_file_path = temp_file.name
+                return temp_file_path
+            else:
+                console.log(f"[bold yellow][!] Failed to download sitemap: {sitemap_url} (status code: {response.status_code})[/bold yellow]")
+        except Exception as e:
+            console.log(f"[bold red][-] Error downloading sitemap from {sitemap_url}: {e}[/bold red]")
+        attempt += 1
+        time.sleep(delay)
+    return None
+
+def extract_urls_from_sitemap(sitemap_url, sitemap_path):
+    urls = []
+    try:
+        console.log(f"[bold blue][*] Extracting URLs from {sitemap_path}[/bold blue]")
+        with open(sitemap_path, 'rb') as file:
+            content = file.read()
+            if sitemap_path.endswith('.gz'):
+                content = gzip.decompress(content)
+            soup = BeautifulSoup(content, 'xml')
+            if soup.find('sitemapindex'):
+                console.log(f"[bold blue][*] Sitemap index found in {sitemap_url}[/bold blue]")
+                for sitemap in soup.find_all('sitemap'):
+                    loc = sitemap.find('loc').text
+                    temp_sitemap_path = download_sitemap(loc)
+                    if temp_sitemap_path:
+                        urls.extend(extract_urls_from_sitemap(loc, temp_sitemap_path))
+                        os.remove(temp_sitemap_path)
+            else:
+                for url in soup.find_all('loc'):
+                    urls.append((sitemap_url, url.text))
+    except Exception as e:
+        console.log(f"[bold red][-] Error extracting URLs from {sitemap_path}: {e}[/bold red]")
+    console.log(f"[bold green][+] Extracted {len(urls)} URLs from {sitemap_url}[/bold green]")
+    return urls
+
+def get_sitemap_urls(domain):
+    # robots_txt = fetch_robots_txt_with_selenium(domain)
+    # if robots_txt:
+    #     disallows, sitemaps = parse_robots_txt(robots_txt)
+    #     if sitemaps:
+    #         return disallows, sitemaps
+    # Prompt user for sitemap URL if not found
+    sitemap_url = console.input(f"[bold yellow][?] No sitemap URL found in robots.txt. Please provide the sitemap URL for {domain}: [/bold yellow]")
+    return sitemap_url
+
+def check_urls_against_robots(disallows, urls):
+    results = []
+    total_urls = len(urls)
+    total_rules = len(disallows)
+    console.log(f"[bold blue][*] Checking {total_urls} URLs against {total_rules} disallow rules[/bold blue]")
+    blocked_count = 0
+
+    for sitemap_url, url in track(urls, description="Checking URLs against robots.txt..."):
+        url_blocked = False
+        for rule in disallows:
+            if rule != '/' and url.startswith(rule):
+                results.append((sitemap_url, url, rule, 'Blocked'))
+                url_blocked = True
+                blocked_count += 1
+                break
+        if not url_blocked:
+            results.append((sitemap_url, url, '', 'Not Blocked'))
+
+    if blocked_count == 0:
+        console.log("[bold green][+] robots.txt is not blocking any important pages[/bold green]")
+    else:
+        console.log(f"[bold red][-] robots.txt is blocking {blocked_count} URLs[/bold red]")
+
+    return results, blocked_count
+
+def save_to_csv(results, domain):
+    df = pd.DataFrame(results, columns=['sitemap_url', 'url', 'robots_txt_rule', 'remark'])
+    output_file = f"{domain}_robots_check.csv"
+    df.to_csv(output_file, index=False)
+    console.log(f"[bold green][+] Results saved to {output_file}[/bold green]")
+
+
+# ROBOTS TESTING END
 
 def format_whois_info(info):
     formatted_info = {}
@@ -426,13 +527,44 @@ def domain_insight(ctx):
                 console.log(f"[+] DNS records saved to {output_file}")
                 display_results([f"{record_type}: {', '.join(records)}" for record_type, records in dns_records.items()])
             elif choice == 4:
-                task = progress.add_task("Checking robots.txt...", total=None)
-                robots_txt = check_robots_txt(current_domain)
-                progress.update(task, completed=True)
+                task_fetch_robots = progress.add_task("Checking robots.txt...", total=None)
+                robots_txt = fetch_robots_txt_with_selenium(current_domain)
+                progress.update(task_fetch_robots, completed=True)
+
                 if robots_txt:
-                    display_results([f"[+] Disallowed rules in robots.txt:"] + [f" - {rule}" for rule in robots_txt])
+                    disallows, sitemaps = parse_robots_txt(robots_txt)
+                    console.log(f"[bold green][+] Disallowed rules in robots.txt: {disallows}[/bold green]")
                 else:
                     console.print("[bold red][-] robots.txt not found on any of the checked URLs.[/bold red]")
+                    return
+                
+                if not disallows:
+                    console.print("[bold green][-] No disallow directive found in the robots.txt[/bold green]")
+                    return
+
+                if not sitemaps:
+                    sitemap_url = get_sitemap_urls(current_domain)
+                    sitemaps = [sitemap_url]
+
+                all_urls = []
+                task_fetch_sitemaps = progress.add_task("Fetching sitemap URLs...", total=None)
+                for sitemap_url in track(sitemaps, description="Fetching sitemap URLs..."):
+                    temp_sitemap_path = download_sitemap(sitemap_url)
+                    if temp_sitemap_path:
+                        urls_from_sitemap = extract_urls_from_sitemap(sitemap_url, temp_sitemap_path)
+                        all_urls.extend(urls_from_sitemap)
+                        os.remove(temp_sitemap_path)
+                        console.log(f"[bold blue][*] {len(urls_from_sitemap)} URLs extracted from {sitemap_url}[/bold blue]")
+                progress.update(task_fetch_sitemaps, completed=True)
+                
+
+                results, blocked_count = check_urls_against_robots(disallows, all_urls)
+
+                if blocked_count > 0:
+                    save_to_csv(results, current_domain)
+                else:
+                    console.log("[bold green][+] No URLs are blocked[/bold green]")
+
             elif choice == 5:
                 task = progress.add_task("Checking WHOIS record...", total=None)
                 whois_info, output_file = get_whois_info(current_domain)
