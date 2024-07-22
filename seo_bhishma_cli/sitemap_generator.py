@@ -1,5 +1,5 @@
 import click
-import pandas as pd
+import pandas as pd 
 from lxml import etree
 import gzip
 import os
@@ -40,10 +40,10 @@ def generate_sitemap(urls, priority=None, frequency=None, lastmod=None):
 def write_sitemap(file_path, sitemap_content, compressed=False):
     try:
         if compressed:
-            with gzip.open(file_path, 'wb', encoding='utf-8') as f:
+            with gzip.open(file_path, 'wb') as f:
                 f.write(sitemap_content)
         else:
-            with open(file_path, 'wb', encoding='utf-8') as f:
+            with open(file_path, 'wb') as f:
                 f.write(sitemap_content)
     except Exception as e:
         console.log(f"[bold red][-] Failed to write sitemap to file: {e}[/bold red]")
@@ -57,98 +57,114 @@ def read_input_file(file_path):
         return []
 
 @click.command()
-@click.pass_context
-def sitemap_generator(ctx):
+@click.option('--input-file', default=None, help='Path to the input CSV file containing URLs')
+@click.option('--output-dir', default='sitemaps/', help='Path to the output directory for sitemaps')
+@click.option('--choice', type=click.Choice(['1', '2', '3']), default=None, help='Menu choice: 1 for single sitemap, 2 for nested sitemaps, 3 to exit')
+@click.option('--nested', is_flag=True, default=False, help='Generate nested sitemaps')
+@click.option('--url-limit', default=50000, help='Maximum number of URLs per sitemap for nested sitemaps')
+@click.option('--compressed', is_flag=True, default=False, help='Create compressed sitemaps')
+@click.option('--priority', default='', help='Priority for URLs')
+@click.option('--frequency', default='', help='Change frequency for URLs')
+@click.option('--lastmod', default='', help='Last modified date for URLs in YYYY-MM-DDTHH:MM:SS+00:00 format')
+def sitemap_generator(input_file, output_dir, choice, nested, url_limit, compressed, priority, frequency, lastmod):
     """Generate XML sitemaps from a list of URLs."""
     while True:
-        console.print("\n" + "="*50, style="bold magenta")
-        console.print("Sitemap Generator", style="bold yellow")
-        console.print("1. Generate a single sitemap", style="cyan")
-        console.print("2. Generate nested sitemaps", style="cyan")
-        console.print("3. Exit", style="bold red")
-        choice = Prompt.ask("[cyan bold]Enter your choice[/cyan bold]", choices=["1", "2", "3"])
+        if not choice:
+            console.print("\n" + "="*50, style="bold magenta")
+            console.print("Sitemap Generator", style="bold yellow")
+            console.print("1. Generate a single sitemap", style="cyan")
+            console.print("2. Generate nested sitemaps", style="cyan")
+            console.print("3. Exit", style="bold red")
+            choice = Prompt.ask("[cyan bold]Enter your choice[/cyan bold]", choices=["1", "2", "3"])
 
         if choice == "3":
             console.print("Exiting Sitemap Generator. Goodbye!", style="bold red")
             break
-        elif choice in ["1", "2"]:
+
+        if not input_file:
             input_file = Prompt.ask("[cyan]Enter the path to the input CSV file[/cyan]", default="input.csv")
-            output_dir = Prompt.ask("[cyan]Enter the output directory[/cyan]", default=os.getcwd())
-            
-            if not os.path.exists(output_dir):
-                console.print(f"[bold red][-] Output directory '{output_dir}' does not exist.[/bold red]")
-                console.print("[bold red][-] Please create the directory and try again.[/bold red]")
-                continue
+        if not output_dir:
+            output_dir = Prompt.ask("[cyan]Enter the output directory[/cyan]", default='sitemaps/')
+        
+        output_dir = os.path.abspath(output_dir)
 
-            nested = choice == "2"
-            url_limit = 50000
-            if nested:
-                url_limit = int(Prompt.ask("[cyan]Enter the maximum number of URLs per sitemap[/cyan]", default=50000, show_default=True))
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+            console.print(f"[green][+] Output directory '{output_dir}' created.[/green]")
+
+        nested = choice == "2" if not nested else nested
+        if nested and url_limit == 50000:
+            url_limit = int(Prompt.ask("[cyan]Enter the maximum number of URLs per sitemap[/cyan]", default=50000, show_default=True))
+        if not compressed:
             compressed = Prompt.ask("[cyan]Do you want to create compressed sitemaps? (yes/no)[/cyan]", default="no") == "yes"
+        if not priority:
             priority = Prompt.ask("[cyan]Enter priority for URLs (or leave blank)[/cyan]", default='', show_default=False)
+        if not frequency:
             frequency = Prompt.ask("[cyan]Enter change frequency for URLs (or leave blank)[/cyan]", default='', show_default=False)
-            lastmod = Prompt.ask("[cyan]Enter the last modified date for URLs (or leave blank for current time)[/cyan]", default='', show_default=False)
+        if not lastmod:
+            lastmod = Prompt.ask("[cyan]Enter the last modified date for URLs (or leave blank for current time in YYYY-MM-DDTHH:MM:SS+00:00)[/cyan]", default='', show_default=False)
             if not lastmod:
-                lastmod = datetime.now().strftime('%Y-%m-%d')
+                lastmod = datetime.now().strftime('%Y-%m-%dT%H:%M:%S+00:00')
 
-            urls = read_input_file(input_file)
-            if not urls:
-                console.print("[bold red][-] No URLs found in the input file.[/bold red]")
-                continue
-            
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        urls = read_input_file(input_file)
+        if not urls:
+            console.print("[bold red][-] No URLs found in the input file.[/bold red]")
+            choice = None
+            continue
 
-            try:
-                if not nested:
-                    # Single sitemap
-                    console.print("[+] Generating single sitemap...", style="bold green")
-                    sitemap_content = generate_sitemap(urls, priority if priority else None, frequency if frequency else None, lastmod)
-                    file_name = f'sitemap_{timestamp}.xml'
-                    file_path = os.path.join(output_dir, file_name)
-                    if compressed:
-                        file_path += '.gz'
-                    write_sitemap(file_path, sitemap_content, compressed)
-                    console.print(f"[+] Single sitemap saved to {file_path}", style="bold green")
-                else:
-                    # Nested sitemaps
-                    console.print("[+] Generating nested sitemaps...", style="bold green")
-                    sitemap_index = []
-                    with Progress() as progress:
-                        task = progress.add_task("[green][+] Creating sitemaps...", total=(len(urls) // url_limit) + 1)
-                        for i in range(0, len(urls), url_limit):
-                            sitemap_urls = urls[i:i+url_limit]
-                            sitemap_content = generate_sitemap(sitemap_urls, priority if priority else None, frequency if frequency else None, lastmod)
-                            sitemap_file_name = f'sitemap_{timestamp}_{i // url_limit}.xml'
-                            sitemap_file_path = os.path.join(output_dir, sitemap_file_name)
-                            if compressed:
-                                sitemap_file_path += '.gz'
-                            write_sitemap(sitemap_file_path, sitemap_content, compressed)
-                            sitemap_index.append(sitemap_file_name if not compressed else sitemap_file_name + '.gz')
-                            progress.advance(task)
-                    
-                    # Generate sitemap index
-                    sitemapindex = etree.Element('sitemapindex', xmlns="http://www.sitemaps.org/schemas/sitemap/0.9")
-                    comment = etree.Comment("Generated by seo-bhishma-cli tool")
-                    sitemapindex.append(comment)
-                    for sitemap in sitemap_index:
-                        sitemap_element = etree.Element('sitemap')
-                        loc_element = etree.Element('loc')
-                        loc_element.text = os.path.join(output_dir, sitemap)
-                        sitemap_element.append(loc_element)
-                        sitemapindex.append(sitemap_element)
-                    
-                    sitemap_index_content = etree.tostring(sitemapindex, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-                    sitemap_index_file = f'sitemap_index_{timestamp}.xml'
-                    sitemap_index_path = os.path.join(output_dir, sitemap_index_file)
-                    if compressed:
-                        sitemap_index_path += '.gz'
-                    write_sitemap(sitemap_index_path, sitemap_index_content, compressed)
-                    console.print(f"[+] Sitemap index saved to {sitemap_index_path}", style="bold green")
-                    console.print(f"[+] Total sitemaps created: {len(sitemap_index)}", style="bold green")
-            except Exception as e:
-                console.log(f"[bold red][-] An error occurred while generating the sitemaps: {e}[/bold red]")
-        else:
-            console.print("[-] Invalid choice. Please select a valid option.", style="bold red")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        try:
+            if choice == "1":
+                # Single sitemap
+                console.print("[+] Generating single sitemap...", style="bold green")
+                sitemap_content = generate_sitemap(urls, priority if priority else None, frequency if frequency else None, lastmod)
+                file_name = f'sitemap_{timestamp}.xml'
+                file_path = os.path.join(output_dir, file_name)
+                if compressed:
+                    file_path += '.gz'
+                write_sitemap(file_path, sitemap_content, compressed)
+                console.print(f"[+] Single sitemap saved to {file_path}", style="bold green")
+            else:
+                # Nested sitemaps
+                console.print("[+] Generating nested sitemaps...", style="bold green")
+                sitemap_index = []
+                with Progress() as progress:
+                    task = progress.add_task("[green][+] Creating sitemaps...", total=(len(urls) // url_limit) + 1)
+                    for i in range(0, len(urls), url_limit):
+                        sitemap_urls = urls[i:i+url_limit]
+                        sitemap_content = generate_sitemap(sitemap_urls, priority if priority else None, frequency if frequency else None, lastmod)
+                        sitemap_file_name = f'sitemap_{timestamp}_{i // url_limit}.xml'
+                        sitemap_file_path = os.path.join(output_dir, sitemap_file_name)
+                        if compressed:
+                            sitemap_file_path += '.gz'
+                        write_sitemap(sitemap_file_path, sitemap_content, compressed)
+                        sitemap_index.append(sitemap_file_name if not compressed else sitemap_file_name + '.gz')
+                        progress.advance(task)
+                
+                # Generate sitemap index
+                sitemapindex = etree.Element('sitemapindex', xmlns="http://www.sitemaps.org/schemas/sitemap/0.9")
+                comment = etree.Comment("Generated by seo-bhishma-cli tool")
+                sitemapindex.append(comment)
+                for sitemap in sitemap_index:
+                    sitemap_element = etree.Element('sitemap')
+                    loc_element = etree.Element('loc')
+                    loc_element.text = os.path.join(output_dir, sitemap)
+                    sitemap_element.append(loc_element)
+                    sitemapindex.append(sitemap_element)
+                
+                sitemap_index_content = etree.tostring(sitemapindex, pretty_print=True, xml_declaration=True, encoding='UTF-8')
+                sitemap_index_file = f'sitemap_index_{timestamp}.xml'
+                sitemap_index_path = os.path.join(output_dir, sitemap_index_file)
+                if compressed:
+                    sitemap_index_path += '.gz'
+                write_sitemap(sitemap_index_path, sitemap_index_content, compressed)
+                console.print(f"[+] Sitemap index saved to {sitemap_index_path}", style="bold green")
+                console.print(f"[+] Total sitemaps created: {len(sitemap_index)}", style="bold green")
+        except Exception as e:
+            console.print(f"[bold red][-] An error occurred while generating the sitemaps: {e}[/bold red]")
+
+        choice = None
 
         console.print("\n" + "="*50 + "\n", style="bold magenta")
 

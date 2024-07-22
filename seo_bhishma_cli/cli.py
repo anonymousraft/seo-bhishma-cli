@@ -13,6 +13,16 @@ console = Console()
 @click.pass_context
 def cli(ctx):
     try:
+        if ctx.invoked_subcommand is None:
+            ctx.invoke(intro)
+            ctx.invoke(menu)
+    except Exception as e:
+        console.print(f"[bold red][-] An error occurred: {e}[/bold red]")
+
+@click.command()
+@click.pass_context
+def intro(ctx):
+    try:
         ascii_art = text2art(CLI_NAME, font='small')
         console.print(f"[bold bright_cyan]{ascii_art}[/bold bright_cyan]")
         console.print(f"[bold green]Welcome to {CLI_NAME}![/bold green]")
@@ -20,9 +30,6 @@ def cli(ctx):
         console.print(f"[green][+] Author: {CLI_AUTHOR}\n[/green]")
         console.print(f"[dim white]This tool is my way of giving back to the community.[/dim white]")
         console.print(f"[dim white]Support: [underline]https://buymeacoffee.com/rathorehitendra[/underline][/dim white]\n")
-
-        if ctx.invoked_subcommand is None:
-            ctx.invoke(menu)
     except Exception as e:
         console.print(f"[bold red][-] An error occurred: {e}[/bold red]")
 
@@ -70,6 +77,7 @@ def menu(ctx):
             console.print(f"[bold red][-] An error occurred: {e}[/bold red]")
 
 cli.add_command(menu)
+cli.add_command(intro)
 cli.add_command(link_sniper)
 cli.add_command(site_mapper)
 cli.add_command(index_spy)

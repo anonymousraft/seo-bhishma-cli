@@ -138,35 +138,48 @@ def parse_sitemap(root, urls, sitemap_name, level=0, output_file=None):
                         progress_bar.update(task, advance=1)
 
 @click.command()
-def site_mapper():
+@click.option('--sitemap-url', default=None, help='URL of the sitemap to download and parse')
+@click.option('--output-file', default=None, help='Path to the output CSV file')
+def site_mapper(sitemap_url, output_file):
     """Download and parse sitemaps, export URLs to CSV."""
-    global progress, output_file
+    global progress
     
-    sitemap_url = click.prompt(click.style("Enter the URL of the sitemap (supports .xml and .gz)", fg="cyan", bold=True))
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    domain_name = extract_domain(sitemap_url)
-    default_filename = f"{domain_name}_sitemap_{timestamp}.csv"
-    output_file = click.prompt(click.style(f"Enter the path to the output CSV file (leave blank for default: {default_filename})", fg="cyan", bold=True), default=default_filename, show_default=True)
-    
-    urls = load_progress(output_file)
-    if urls:
-        console.log("[yellow][+] Resuming from previous progress...[/yellow]")
-    else:
-        console.log("[green][+] Starting new sitemap parsing...[/green]")
-    
-    console.log("[green][+] Downloading and parsing sitemap...[/green]")
-    root = download_sitemap(sitemap_url)
-    if root:
-        progress = {'urls': urls}
-        parse_sitemap(root, urls, sitemap_url, output_file=output_file)
-        df = pd.DataFrame(urls)
-        df.to_csv(output_file, index=False, encoding='utf-8')
-        if os.path.exists(output_file + ".temp"):
-            os.remove(output_file + ".temp")
-        console.log(f"[green][+] Sitemap data saved to {output_file}[/green]")
-        console.log("\n")
-    else:
-        console.log("[bold red][-] Failed to process sitemap.[/bold red]")
+    try:
+        if not sitemap_url:
+            sitemap_url = click.prompt(click.style("Enter the URL of the sitemap (supports .xml and .gz)", fg="cyan", bold=True))
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        domain_name = extract_domain(sitemap_url)
+        default_filename = f"{domain_name}_sitemap_{timestamp}.csv"
+        
+        if output_file:
+            file_path, file_name = os.path.split(output_file)
+            file_base, file_extension = os.path.splitext(file_name)
+            output_file = os.path.join(file_path, f"{file_base}_{timestamp}{file_extension}")
+        else:
+            output_file = click.prompt(click.style(f"Enter the path to the output CSV file (leave blank for default: {default_filename})", fg="cyan", bold=True), default=default_filename, show_default=True)
+        
+        urls = load_progress(output_file)
+        if urls:
+            console.log("[yellow][+] Resuming from previous progress...[/yellow]")
+        else:
+            console.log("[green][+] Starting new sitemap parsing...[/green]")
+        
+        console.log("[green][+] Downloading and parsing sitemap...[/green]")
+        root = download_sitemap(sitemap_url)
+        if root:
+            progress = {'urls': urls}
+            parse_sitemap(root, urls, sitemap_url, output_file=output_file)
+            df = pd.DataFrame(urls)
+            df.to_csv(output_file, index=False, encoding='utf-8')
+            if os.path.exists(output_file + ".temp"):
+                os.remove(output_file + ".temp")
+            console.log(f"[green][+] Sitemap data saved to {output_file}[/green]")
+            console.log("\n")
+        else:
+            console.log("[bold red][-] Failed to process sitemap.[/bold red]")
+    except Exception as e:
+        console.log(f"[bold red][-] An error occurred: {e}[/bold red]")
 
 if __name__ == "__main__":
     site_mapper()
