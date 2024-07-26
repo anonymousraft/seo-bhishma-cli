@@ -3,7 +3,7 @@ from art import text2art
 from rich.console import Console
 from rich.prompt import Prompt
 from rich.table import Table
-from seo_bhishma_cli import link_sniper, site_mapper, index_spy, sitemap_generator, keyword_sorcerer, gsc_probe, redirection_genius, domain_insight
+from seo_bhishma_cli import link_sniper, site_mapper, index_spy, sitemap_generator, keyword_sorcerer, gsc_probe, redirection_genius, domain_insight, hannibal
 from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
 
 console = Console()
@@ -49,11 +49,12 @@ def menu(ctx):
             table.add_row("[bold magenta]6.[/bold magenta]", "[yellow]GSC Probe[/yellow]")
             table.add_row("[bold magenta]7.[/bold magenta]", "[yellow]Redirection Genius[/yellow]")
             table.add_row("[bold magenta]8.[/bold magenta]", "[yellow]Domain Insights[/yellow]")
+            table.add_row("[bold magenta]9.[/bold magenta]", "[yellow]Hannibal[/yellow]")
             table.add_row("[bold red]0.[/bold red]", "[red]Exit[/red]")
             
             console.print(table)
 
-            choice = Prompt.ask("[bold cyan]Enter your choice[/bold cyan]", choices=["1", "2", "3", "4", "5", "6", "7", "8", "0"])
+            choice = Prompt.ask("[bold cyan]Enter your choice[/bold cyan]", choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"])
 
             if choice == "1":
                 ctx.invoke(link_sniper)
@@ -71,6 +72,8 @@ def menu(ctx):
                 ctx.invoke(redirection_genius)
             elif choice == "8":
                 ctx.invoke(domain_insight)
+            elif choice == "9":
+                ctx.invoke(hannibal)
             elif choice == "0":
                 console.print(f"[bold red]Exiting {CLI_NAME}. Goodbye![/bold red]")
                 break
@@ -87,6 +90,7 @@ cli.add_command(keyword_sorcerer)
 cli.add_command(gsc_probe)
 cli.add_command(redirection_genius)
 cli.add_command(domain_insight)
+cli.add_command(hannibal)
 
 if __name__ == "__main__":
     cli()

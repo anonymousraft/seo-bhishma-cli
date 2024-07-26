@@ -6,6 +6,7 @@ from .keyword_sorcerer import keyword_sorcerer
 from .gsc_probe import gsc_probe
 from .redirection_genius import redirection_genius
 from .domain_insight import domain_insight
+from .hannibal import hannibal
 
 __all__ = [
     'link_sniper',
@@ -15,5 +16,6 @@ __all__ = [
     'keyword_sorcerer',
     'gsc_probe',
     'redirection_genius',
-    'domain_insight'
+    'domain_insight',
+    'hannibal'
 ]
