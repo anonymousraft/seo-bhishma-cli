@@ -346,6 +346,7 @@ def handle_browser_close():
 @click.command()
 @click.pass_context
 def index_spy(ctx):
+    """Check indexing for bulk URLs"""
     global results, output_file, driver
 
     use_proxy = Prompt.ask("[cyan]Do you want to use proxies?[/cyan]", default="no").lower() == "yes"

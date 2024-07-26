@@ -22,6 +22,7 @@ def cli(ctx):
 @click.command()
 @click.pass_context
 def intro(ctx):
+    """SEO Bhishma intro"""
     try:
         ascii_art = text2art(CLI_NAME, font='small')
         console.print(f"[bold bright_cyan]{ascii_art}[/bold bright_cyan]")
@@ -40,14 +41,14 @@ def menu(ctx):
     while True:
         try:
             table = Table(show_header=False, box=None)
-            table.add_row("[bold magenta]1.[/bold magenta]", "[yellow]LinkSniper - Check Backlinks[/yellow]")
-            table.add_row("[bold magenta]2.[/bold magenta]", "[yellow]SiteMapper - Download Sitemap[/yellow]")
-            table.add_row("[bold magenta]3.[/bold magenta]", "[yellow]IndexSpy - Bulk Indexing Checker[/yellow]")
-            table.add_row("[bold magenta]4.[/bold magenta]", "[yellow]Sitemap Generator - Generate sitemap from List of URLs[/yellow]")
-            table.add_row("[bold magenta]5.[/bold magenta]", "[yellow]Keyword Sorcerer - GPT4 based Keyword Clusteriser[/yellow]")
-            table.add_row("[bold magenta]6.[/bold magenta]", "[yellow]GSC Probe - Extract Unlimited GSC Data[/yellow]")
-            table.add_row("[bold magenta]7.[/bold magenta]", "[yellow]Redirection Genius - Powerful NLP based URL mapper[/yellow]")
-            table.add_row("[bold magenta]8.[/bold magenta]", "[yellow]Domain Insights - Domain Social Engineering Tool[/yellow]")
+            table.add_row("[bold magenta]1.[/bold magenta]", "[yellow]LinkSniper[/yellow]")
+            table.add_row("[bold magenta]2.[/bold magenta]", "[yellow]SiteMapper[/yellow]")
+            table.add_row("[bold magenta]3.[/bold magenta]", "[yellow]IndexSpy[/yellow]")
+            table.add_row("[bold magenta]4.[/bold magenta]", "[yellow]Sitemap Generator[/yellow]")
+            table.add_row("[bold magenta]5.[/bold magenta]", "[yellow]Keyword Sorcerer[/yellow]")
+            table.add_row("[bold magenta]6.[/bold magenta]", "[yellow]GSC Probe[/yellow]")
+            table.add_row("[bold magenta]7.[/bold magenta]", "[yellow]Redirection Genius[/yellow]")
+            table.add_row("[bold magenta]8.[/bold magenta]", "[yellow]Domain Insights[/yellow]")
             table.add_row("[bold red]0.[/bold red]", "[red]Exit[/red]")
             
             console.print(table)

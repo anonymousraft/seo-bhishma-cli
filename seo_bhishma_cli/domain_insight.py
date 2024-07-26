@@ -474,10 +474,12 @@ def tech_analysis(domain):
     console.print(f"[bold green][+] Analysis saved to {filename}[/bold green]")
 
 @click.command()
-@click.pass_context
-def domain_insight(ctx):
+@click.option('--domain', default=None, help='Domain to analyze')
+@click.option('--choice', type=click.Choice(['1', '2', '3', '4', '5', '6', '7', '0']), default=None, help='Menu choice')
+def domain_insight(domain, choice):
     """Advanced domain information gathering tool."""
     global current_domain
+    current_domain = domain
 
     while True:
         console.print()
@@ -486,20 +488,20 @@ def domain_insight(ctx):
         console.print("[magenta]=============================[/magenta]")
 
         if not current_domain:
-            set_domain()
-        
+            current_domain = click.prompt(click.style("Enter the domain to analyze", fg="cyan", bold=True))
+
         console.print(f"[cyan]Current domain: {current_domain}[/cyan]")
-        console.print("[yellow]1. Check other websites hosted on the same IP[/yellow]")
-        console.print("[yellow]2. Identify subdomains[/yellow]")
-        console.print("[yellow]3. Check DNS records[/yellow]")
-        console.print("[yellow]4. Check robots.txt[/yellow]")
-        console.print("[yellow]5. Check WHOIS record[/yellow]")
-        console.print("[yellow]6. Get IP address details[/yellow]")
-        console.print("[yellow]7. Tech stack analysis[/yellow]")
-        console.print("[red]0. Exit[/red]")
-        console.print()
-        
-        choice = click.prompt(click.style("Please choose an option", fg="yellow", bold=True), type=int)
+        if not choice:
+            console.print("[yellow]1. Check other websites hosted on the same IP[/yellow]")
+            console.print("[yellow]2. Identify subdomains[/yellow]")
+            console.print("[yellow]3. Check DNS records[/yellow]")
+            console.print("[yellow]4. Check robots.txt[/yellow]")
+            console.print("[yellow]5. Check WHOIS record[/yellow]")
+            console.print("[yellow]6. Get IP address details[/yellow]")
+            console.print("[yellow]7. Tech stack analysis[/yellow]")
+            console.print("[red]0. Exit[/red]")
+            console.print()
+            choice = click.prompt(click.style("Please choose an option", fg="yellow", bold=True), type=int)
 
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
             if choice == 1:
@@ -524,7 +526,7 @@ def domain_insight(ctx):
                 task = progress.add_task("Checking DNS records...", total=None)
                 dns_records, output_file = get_dns_records(current_domain)
                 progress.update(task, completed=True)
-                console.log(f"[+] DNS records saved to {output_file}")
+                console.print(f"[+] DNS records saved to {output_file}")
                 display_results([f"{record_type}: {', '.join(records)}" for record_type, records in dns_records.items()])
             elif choice == 4:
                 task_fetch_robots = progress.add_task("Checking robots.txt...", total=None)
@@ -533,7 +535,7 @@ def domain_insight(ctx):
 
                 if robots_txt:
                     disallows, sitemaps = parse_robots_txt(robots_txt)
-                    console.log(f"[bold green][+] Disallowed rules in robots.txt: {disallows}[/bold green]")
+                    console.print(f"[bold green][+] Disallowed rules in robots.txt: {disallows}[/bold green]")
                 else:
                     console.print("[bold red][-] robots.txt not found on any of the checked URLs.[/bold red]")
                     return
@@ -554,16 +556,15 @@ def domain_insight(ctx):
                         urls_from_sitemap = extract_urls_from_sitemap(sitemap_url, temp_sitemap_path)
                         all_urls.extend(urls_from_sitemap)
                         os.remove(temp_sitemap_path)
-                        console.log(f"[bold blue][*] {len(urls_from_sitemap)} URLs extracted from {sitemap_url}[/bold blue]")
+                        console.print(f"[bold blue][*] {len(urls_from_sitemap)} URLs extracted from {sitemap_url}[/bold blue]")
                 progress.update(task_fetch_sitemaps, completed=True)
                 
-
                 results, blocked_count = check_urls_against_robots(disallows, all_urls)
 
                 if blocked_count > 0:
                     save_to_csv(results, current_domain)
                 else:
-                    console.log("[bold green][+] No URLs are blocked[/bold green]")
+                    console.print("[bold green][+] No URLs are blocked[/bold green]")
 
             elif choice == 5:
                 task = progress.add_task("Checking WHOIS record...", total=None)
@@ -590,6 +591,8 @@ def domain_insight(ctx):
                 break
             else:
                 console.print("[bold red][-] Invalid choice! Please try again.[/bold red]")
+
+        choice = None
 
 if __name__ == "__main__":
     domain_insight()

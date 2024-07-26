@@ -210,28 +210,29 @@ def start_redirection():
     console.print(f"[blue][+] Mapped URLs: {len(results)}[/blue]")
 
 @click.command()
-@click.pass_context
-def redirection_genius(ctx):
+@click.option('--choice', type=click.Choice(['1', '0']), default=None, help='Menu choice: 1 to start URL redirection mapping, 0 to exit')
+def redirection_genius(choice):
     """Powerful & intelligent redirect URL mapper."""
     while True:
-        console.print()
-        console.print("[magenta]=============================[/magenta]")
-        console.print("[magenta]   Welcome to RedirectGenius   [/magenta]")
-        console.print("[magenta]=============================[/magenta]")
-        console.print("[yellow]1. Start URL redirection mapping[/yellow]")
-        console.print("[red]0. Exit[/red]")
-        console.print()
-        
-        choice = click.prompt(click.style("Please choose an option", fg="yellow", bold=True), type=int)
-        
+        if not choice:
+            console.print()
+            console.print("[magenta]=============================[/magenta]")
+            console.print("[magenta]   Welcome to RedirectGenius   [/magenta]")
+            console.print("[magenta]=============================[/magenta]")
+            console.print("[yellow]1. Start URL redirection mapping[/yellow]")
+            console.print("[red]0. Exit[/red]")
+            console.print()
+            
+            choice = click.prompt(click.style("Please choose an option", fg="yellow", bold=True), type=int)
+
         if choice == 1:
             start_redirection()
         elif choice == 0:
             console.print("[bold red]Thank you for using RedirectGenius![/bold red]")
             break
-            # raise SystemExit
         else:
             console.print("[bold red][-] Invalid choice! Please try again.[/bold red]")
+            choice = None
 
 if __name__ == "__main__":
     redirection_genius()

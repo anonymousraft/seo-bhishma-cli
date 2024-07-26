@@ -221,7 +221,7 @@ def gsc_probe(ctx):
 
         site_choice = click.prompt(click.style("Enter the number of the site you want to select (or type 'exit' to quit)", fg="magenta"))
         if site_choice.lower() == 'exit':
-            console.print("[bold blue]Thank you for using GSC Probe! Goodbye![/bold blue]")
+            console.print("[bold red]Thank you for using GSC Probe! Goodbye![/bold red]")
             break
         
         try:
