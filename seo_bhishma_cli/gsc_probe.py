@@ -9,6 +9,8 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from rich.console import Console
+from rich.panel import Panel
+from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
 from rich.progress import Progress, BarColumn, TimeRemainingColumn
 from rich.logging import RichHandler
 import signal
@@ -203,8 +205,7 @@ def gsc_probe(ctx):
     """Google Search Console Data Extraction Tool!"""
     creds_path = None
     while True:
-        console.print("\n[bold blue]Welcome to GSC Probe![/bold blue]")
-        console.print("[yellow]This tool helps you extract various types of data from your Google Search Console account.[/yellow]\n")
+        console.print(Panel("Welcome to GSC Probe!\nThis tool helps you extract various types of data from your Google Search Console account.", title="GSC Probe", border_style="green", subtitle=f"{CLI_NAME}, v{CLI_VERSION} by {CLI_AUTHOR}", subtitle_align="right"))
 
         service = authenticate_gsc(creds_path)
         

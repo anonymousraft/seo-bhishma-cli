@@ -8,6 +8,8 @@ from requests.packages.urllib3.util.retry import Retry
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn, TimeRemainingColumn
 from datetime import datetime
+from rich.panel import Panel
+from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
 
 console = Console()
 
@@ -94,8 +96,7 @@ def process_url(row):
 def link_sniper(ctx):
     """Check if backlinks are live and verify anchor texts."""
     while True:
-        console.print("\n" + "="*50)
-        console.print("[yellow bold]LinkSniper - Check Backlinks[/yellow bold]")
+        console.print(Panel("Link Sniper\nCheck bulk backlinks to determine if they are live or not.", title="Link Sniper", border_style="green", subtitle=f"{CLI_NAME}, v{CLI_VERSION} by {CLI_AUTHOR}", subtitle_align="right"))
         console.print("[cyan]1. Check a single URL[/cyan]")
         console.print("[cyan]2. Check URLs from a file[/cyan]")
         console.print("[red bold]3. Exit[/red bold]")

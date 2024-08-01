@@ -17,6 +17,8 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 import signal
+from rich.panel import Panel
+from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
 
 # Ensure the spaCy model is available
 def ensure_spacy_model(model_name):
@@ -215,13 +217,9 @@ def redirection_genius(choice):
     """Powerful & intelligent redirect URL mapper."""
     while True:
         if not choice:
-            console.print()
-            console.print("[magenta]=============================[/magenta]")
-            console.print("[magenta]   Welcome to RedirectGenius   [/magenta]")
-            console.print("[magenta]=============================[/magenta]")
+            console.print(Panel("Welcome to RedirectGenius\nPowerful and intelligent URL to URL redirection mapper", title="RedirectGenius", border_style="green", subtitle=f"{CLI_NAME}, v{CLI_VERSION} by {CLI_AUTHOR}", subtitle_align="right"))
             console.print("[yellow]1. Start URL redirection mapping[/yellow]")
             console.print("[red]0. Exit[/red]")
-            console.print()
             
             choice = click.prompt(click.style("Please choose an option", fg="yellow", bold=True), type=int)
 

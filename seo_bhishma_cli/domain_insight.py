@@ -17,6 +17,8 @@ from ipwhois import IPWhois
 from geopy.geocoders import Nominatim
 from fake_useragent import UserAgent
 from rich.console import Console
+from rich.panel import Panel
+from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
 from rich.progress import Progress, SpinnerColumn, TextColumn, track
 from Wappalyzer import Wappalyzer, WebPage
 from requests_html import HTMLSession
@@ -127,12 +129,17 @@ def save_reverse_ip_results(domain, h1_title, table_info, domains_list):
     return output_file
 
 def scrape_with_selenium(ip):
-    options = webdriver.ChromeOptions()
+    options = Options()
     # Do not add headless option to see the browser and solve CAPTCHA manually
     options.add_argument("--disable-gpu")  # Disable GPU acceleration
     
     # Use ChromeDriverManager to get the path to the ChromeDriver
-    service = ChromeService(ChromeDriverManager().install())
+    try:
+        service = ChromeService(ChromeDriverManager().install())
+    except Exception as e:
+        console.log(f"[bold red]Error installing ChromeDriver: {e}[/bold red]")
+        return None
+    
     driver = webdriver.Chrome(service=service, options=options)
     
     query = f"https://domains.tntcode.com/ip/{ip}"
@@ -482,10 +489,7 @@ def domain_insight(domain, choice):
     current_domain = domain
 
     while True:
-        console.print()
-        console.print("[magenta]=============================[/magenta]")
-        console.print("[magenta]   Welcome to Domain Insight   [/magenta]")
-        console.print("[magenta]=============================[/magenta]")
+        console.print(Panel("Welcome to Domain Insight\nPowerful domain information gathering tool.", title="Domain Insight", border_style="green", subtitle=f"{CLI_NAME}, v{CLI_VERSION} by {CLI_AUTHOR}", subtitle_align="right"))
 
         if not current_domain:
             current_domain = click.prompt(click.style("Enter the domain to analyze", fg="cyan", bold=True))

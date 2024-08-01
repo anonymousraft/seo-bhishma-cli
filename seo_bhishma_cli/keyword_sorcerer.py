@@ -5,6 +5,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN, SpectralClustering
 from sklearn.metrics import silhouette_score
 from datetime import datetime
+from rich.panel import Panel
+from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
 import os
 import numpy as np
 import time
@@ -181,8 +183,7 @@ def keyword_sorcerer(ctx):
     config = load_config()
     
     while True:
-        console.print("\n" + "="*50)
-        console.print("[yellow bold]Keyword Sorcerer")
+        console.print(Panel("Keyword Sorcerer\nKeyword clusterizer powered by GPT-4o", title="Keyword Sorcerer", border_style="green", subtitle=f"{CLI_NAME}, v{CLI_VERSION} by {CLI_AUTHOR}", subtitle_align="right"))
         console.print("[cyan]1. Cluster keywords with KMeans")
         console.print("[cyan]2. Cluster keywords with Agglomerative Clustering")
         console.print("[cyan]3. Cluster keywords with DBSCAN")

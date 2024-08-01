@@ -13,6 +13,8 @@ import os
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import signal
+from rich.panel import Panel
+from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(message)s', handlers=[RichHandler()])
@@ -145,6 +147,7 @@ def site_mapper(sitemap_url, output_file):
     global progress
     
     try:
+        console.print(Panel("Welcome to Sitemapper\nDownload sitemap in CSV file. Support nested & compressed sitemaps", title="Sitemapper", border_style="green", subtitle=f"{CLI_NAME}, v{CLI_VERSION} by {CLI_AUTHOR}", subtitle_align="right"))        
         if not sitemap_url:
             sitemap_url = click.prompt(click.style("Enter the URL of the sitemap (supports .xml and .gz)", fg="cyan", bold=True))
         

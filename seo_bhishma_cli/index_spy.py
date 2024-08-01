@@ -11,6 +11,8 @@ import sys
 from rich.console import Console
 from rich.progress import track
 from rich.prompt import Prompt
+from rich.panel import Panel
+from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from requests_html import HTMLSession
 from browserforge.headers import HeaderGenerator
@@ -395,8 +397,7 @@ def index_spy(ctx):
     signal.signal(signal.SIGTERM, handle_browser_close)
 
     while True:
-        console.print("\n" + "="*50)
-        console.print("[yellow bold]IndexSpy - Bulk Indexing Checker[/yellow bold]")
+        console.print(Panel("Welcome to IndexSpy\nBulk Indexing Checker with Proxy & Selenium", title="IndexSpy", border_style="green", subtitle=f"{CLI_NAME}, v{CLI_VERSION} by {CLI_AUTHOR}", subtitle_align="right"))
         console.print("[cyan]1. Check a single URL[/cyan]")
         console.print("[cyan]2. Check URLs from a file[/cyan]")
         console.print("[red bold]3. Exit[/red bold]")

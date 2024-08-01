@@ -8,6 +8,8 @@ from rich.console import Console
 from rich.prompt import Prompt
 from rich.progress import Progress
 from rich import print as rprint
+from rich.panel import Panel
+from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
 
 console = Console()
 
@@ -70,8 +72,7 @@ def sitemap_generator(input_file, output_dir, choice, nested, url_limit, compres
     """Generate XML sitemaps from a list of URLs."""
     while True:
         if not choice:
-            console.print("\n" + "="*50, style="bold magenta")
-            console.print("Sitemap Generator", style="bold yellow")
+            console.print(Panel("Welcome to Sitemap Generator\nGenearte sitemap from a list of URLs. Supports nested and compressed sitemap generation", title="Sitemap Generator", border_style="green", subtitle=f"{CLI_NAME}, v{CLI_VERSION} by {CLI_AUTHOR}", subtitle_align="right"))        
             console.print("1. Generate a single sitemap", style="cyan")
             console.print("2. Generate nested sitemaps", style="cyan")
             console.print("3. Exit", style="bold red")

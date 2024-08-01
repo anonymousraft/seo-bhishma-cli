@@ -5,6 +5,7 @@ import subprocess
 from rich.console import Console
 from rich.prompt import Prompt
 from rich.panel import Panel
+from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
 from rich.progress import Progress
 from datetime import datetime
 import pandas as pd
@@ -308,7 +309,7 @@ def save_cannibalization_report(report, output_file):
 @click.option('--use-semantic-check', is_flag=True, default=False, help='Enable semantic check.')
 def hannibal(input_csv, output_csv, exact_match_threshold, impression_share_threshold, click_share_threshold, query_share_threshold, use_slug_similarity, slug_similarity_threshold, use_semantic_check):
     """Identifies URL cannibalization issues using GSC data"""
-    console.print(Panel("Welcome to Hannibal\nIdentifies URL cannibalization issues using GSC data.", title="Hannibal", border_style="green"))
+    console.print(Panel("Welcome to Hannibal\nIdentifies URL cannibalization issues using GSC data.", title="Hannibal", border_style="green", subtitle=f"{CLI_NAME}, v{CLI_VERSION} by {CLI_AUTHOR}", subtitle_align="right"))
 
     if not input_csv:
         input_csv = click.prompt(click.style("Enter the path to the input CSV file", fg="cyan"), default="input.csv", show_default=True)
