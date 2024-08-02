@@ -78,22 +78,25 @@ You will see the following menu:
                                                        
 
 Welcome to SEO Bhishma!
-Version: 1.4.4
-Author: @hi7endra
+[+] Version: 1.5.1
+[+] Author: @hi7endra
 
 This tool is my way of giving back to the community.
 Support: https://buymeacoffee.com/rathorehitendra
 
- 1.  LinkSniper - Check Backlinks                           
- 2.  SiteMapper - Download Sitemap                          
- 3.  IndexSpy - Bulk Indexing Checker                       
- 4.  Sitemap Generator - Generate sitemap from List of URLs 
- 5.  Keyword Sorcerer - Keyword Clusteriser                 
- 6.  GSC Probe - Extract GSC Data                           
- 7.  Redirection Genius - Powerful NLP based URL mapper
- 8.  Domain Insights - Domain Social Engineering Tool    
- 0.  Exit                                                   
-Enter your choice [1/2/3/4/5/6/7/8/0]:                                       
+╭────┬────────────────────╮
+│ 1. │ GSC Probe          │
+│ 2. │ Domain Insights    │
+│ 3. │ Keyword Sorcerer   │
+│ 4. │ Hannibal           │
+│ 5. │ IndexSpy           │
+│ 6. │ Redirection Genius │
+│ 7. │ LinkSniper         │
+│ 8. │ SiteMapper         │
+│ 9. │ Sitemap Generator  │
+│ 0. │ Exit               │
+╰────┴────────────────────╯
+Enter your choice [1/2/3/4/5/6/7/8/9/0]:                                    
 ```
 
 Select an option by entering the corresponding number.
