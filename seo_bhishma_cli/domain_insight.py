@@ -23,22 +23,38 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, track
 from Wappalyzer import Wappalyzer, WebPage
 from requests_html import HTMLSession
 from browserforge.headers import HeaderGenerator
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.chrome.service import Service as ChromeService
-from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.common.exceptions import WebDriverException
 from tempfile import NamedTemporaryFile
+import asyncio
+from pathlib import Path
+from playwright.async_api import async_playwright
+import subprocess
 
 # Initialize rich console
 console = Console()
 geolocator = Nominatim(user_agent="domain_insight")
 session = None
+driver = None
 
 ua = UserAgent()
+
+def pb_checks():
+    playwright_cache_dir = Path.home() / ".cache" / "ms-playwright"
+    
+    if not playwright_cache_dir.exists():
+        # Additional check for Windows where the cache might be stored in a different location
+        playwright_cache_dir = Path.home() / "AppData" / "Local" / "ms-playwright"
+    
+    return playwright_cache_dir.exists() and any(playwright_cache_dir.iterdir())
+
+
+def install_playwright_binaries():
+    if not pb_checks():
+        try:
+            subprocess.run(["playwright", "install"], check=True)
+            print("Playwright binaries installed successfully.")
+        except Exception as e:
+            print(f"An error occurred while installing Playwright binaries: {e}")
+            exit(1)
 
 # Global variable to store the domain for the session
 current_domain = None
@@ -128,63 +144,49 @@ def save_reverse_ip_results(domain, h1_title, table_info, domains_list):
             file.write(f"{domain}\n")
     return output_file
 
-def scrape_with_selenium(ip):
-    options = Options()
-    # Do not add headless option to see the browser and solve CAPTCHA manually
-    options.add_argument("--disable-gpu")  # Disable GPU acceleration
-    
-    # Use ChromeDriverManager to get the path to the ChromeDriver
-    try:
-        service = ChromeService(ChromeDriverManager().install())
-    except Exception as e:
-        console.log(f"[bold red]Error installing ChromeDriver: {e}[/bold red]")
-        return None
-    
-    driver = webdriver.Chrome(service=service, options=options)
-    
+async def scrape_with_playwright(ip):
     query = f"https://domains.tntcode.com/ip/{ip}"
-    driver.get(query)
 
-    # Loop until CAPTCHA is solved and the table is found or another condition is met
-    while True:
-        try:
-            if driver.title == "Captcha":
-                console.log("[bold yellow]CAPTCHA detected. Please solve the CAPTCHA in the browser.[/bold yellow]")
-                while driver.title == "Captcha":
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=False)
+        page = await browser.new_page()
+
+        await page.goto(query)
+
+        # Loop until CAPTCHA is solved and the table is found or another condition is met
+        while True:
+            if "Captcha" in await page.title():
+                print("CAPTCHA detected. Please solve the CAPTCHA in the browser.")
+                while "Captcha" in await page.title():
                     try:
-                        WebDriverWait(driver, 10).until(
-                            EC.presence_of_element_located((By.TAG_NAME, "body"))
-                        )
-                    except WebDriverException:
-                        console.log("[bold red]Browser window closed by the user.[/bold red]")
-                        driver.quit()
+                        await page.wait_for_selector("body", timeout=10000)
+                    except Exception:
+                        print("Browser window closed by the user.")
+                        await browser.close()
                         return None
-            WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.TAG_NAME, "table"))
-            )
-            break
-        except:
-            console.log("[bold yellow]Waiting for CAPTCHA to be solved or for the content to be available...[/bold yellow]")
-            page_source = driver.page_source
-            if "not found" in page_source.lower():
-                console.log("[bold red]Content not found[/bold red]")
-                driver.quit()
-                return page_source
-            if "verifying you are human" not in page_source.lower():
+            try:
+                await page.wait_for_selector("table", timeout=20000)
                 break
-            # Wait a bit before trying again
-            WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.TAG_NAME, "body"))
-            )
+            except Exception:
+                print("Waiting for CAPTCHA to be solved or for the content to be available...")
+                page_source = await page.content()
+                if "not found" in page_source.lower():
+                    print("Content not found")
+                    await browser.close()
+                    return page_source
+                if "verifying you are human" not in page_source.lower():
+                    break
+                # Wait a bit before trying again
+                await page.wait_for_selector("body", timeout=20000)
 
-    page_source = driver.page_source
-    driver.quit()
-    return page_source
-
+        page_source = await page.content()
+        await browser.close()
+        return page_source
+    
 def reverse_ip_lookup(ip, domain):
     try:
         console.log("[bold green]Starting reverse IP lookup...[/bold green]")
-        page_source = scrape_with_selenium(ip)
+        page_source = asyncio.run(scrape_with_playwright(ip))
 
         if page_source is None or "not found" in page_source.lower():
             console.log("[bold red]Content not found on the page[/bold red]")
@@ -236,12 +238,7 @@ def get_dns_records(domain):
         return {}, None
 
 # ROBOTS TESTING
-def fetch_robots_txt_with_selenium(domain):
-    options = Options()
-    options.headless = True
-    service = ChromeService(executable_path=ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
-
+async def fetch_robots_txt_with_playwright(domain):
     robots_urls = [
         f"https://{domain}/robots.txt",
         f"http://{domain}/robots.txt",
@@ -249,18 +246,24 @@ def fetch_robots_txt_with_selenium(domain):
         f"http://www.{domain}/robots.txt"
     ]
 
-    for url in robots_urls:
-        try:
-            driver.get(url)
-            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "pre")))
-            robots_txt = driver.find_element(By.TAG_NAME, "pre").text
-            if robots_txt:
-                console.log(f"[bold green][+] Found robots.txt at {url}[/bold green]")
-                driver.quit()
-                return robots_txt
-        except Exception as e:
-            console.log(f"[bold red][-] Error fetching robots.txt from {url} using Selenium: {e}[/bold red]")
-    driver.quit()
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+
+        for url in robots_urls:
+            try:
+                await page.goto(url)
+                await page.wait_for_selector("pre", timeout=10000)
+                robots_txt = await page.query_selector("pre")
+                robots_txt = await robots_txt.inner_text() if robots_txt else None
+                if robots_txt:
+                    console.print(f"[bold green][+] Found robots.txt at {url}[/bold green]")
+                    await browser.close()
+                    return robots_txt
+            except Exception as e:
+                console.print(f"[bold red][-] Error fetching robots.txt from {url} using Playwright: {e}[/bold red]")
+        
+        await browser.close()
     return None
 
 def parse_robots_txt(robots_txt):
@@ -487,14 +490,16 @@ def domain_insight(domain, choice):
     """Advanced domain information gathering tool."""
     global current_domain
     current_domain = domain
+    
+    console.print(Panel("Welcome to Domain Insight\nPowerful domain information gathering tool.", title="Domain Insight", border_style="green", subtitle=f"{CLI_NAME}, v{CLI_VERSION} by {CLI_AUTHOR}", subtitle_align="right"))
+    install_playwright_binaries()
 
     while True:
-        console.print(Panel("Welcome to Domain Insight\nPowerful domain information gathering tool.", title="Domain Insight", border_style="green", subtitle=f"{CLI_NAME}, v{CLI_VERSION} by {CLI_AUTHOR}", subtitle_align="right"))
 
         if not current_domain:
             current_domain = click.prompt(click.style("Enter the domain to analyze", fg="cyan", bold=True))
 
-        console.print(f"[cyan]Current domain: {current_domain}[/cyan]")
+        console.print(f"[cyan]\nCurrent domain: {current_domain}[/cyan]")
         if not choice:
             console.print("[yellow]1. Check other websites hosted on the same IP[/yellow]")
             console.print("[yellow]2. Identify subdomains[/yellow]")
@@ -534,7 +539,7 @@ def domain_insight(domain, choice):
                 display_results([f"{record_type}: {', '.join(records)}" for record_type, records in dns_records.items()])
             elif choice == 4:
                 task_fetch_robots = progress.add_task("Checking robots.txt...", total=None)
-                robots_txt = fetch_robots_txt_with_selenium(current_domain)
+                robots_txt = asyncio.run(fetch_robots_txt_with_playwright(current_domain))
                 progress.update(task_fetch_robots, completed=True)
 
                 if robots_txt:

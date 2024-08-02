@@ -26,3 +26,4 @@ lxml_html_clean
 selenium
 webdriver-manager
 browserforge[all]
+playwright
