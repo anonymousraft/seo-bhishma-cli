@@ -4,7 +4,6 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN, SpectralClustering
 from sklearn.metrics import silhouette_score
 from datetime import datetime
-import numpy as np
 import yaml
 
 # Suppress detailed httpx logs

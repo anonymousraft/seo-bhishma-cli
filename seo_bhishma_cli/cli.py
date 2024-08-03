@@ -1,5 +1,5 @@
 from seo_bhishma_cli.common import *
-from art import text2art, aprint
+from art import text2art
 from rich.table import Table
 from rich import box
 from seo_bhishma_cli import link_sniper, site_mapper, index_spy, sitemap_generator, keyword_sorcerer, gsc_probe, redirection_genius, domain_insight, hannibal

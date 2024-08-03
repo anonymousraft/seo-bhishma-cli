@@ -70,19 +70,14 @@ seo-bhishma-cli
 
 You will see the following menu:
 
-```
- ___  ___   ___    ___  _     _      _                 
-/ __|| __| / _ \  | _ )| |_  (_) ___| |_   _ __   __ _ 
-\__ \| _| | (_) | | _ \| ' \ | |(_-<| ' \ | '  \ / _` |
-|___/|___| \___/  |___/|_||_||_|/__/|_||_||_|_|_|\__,_|
-                                                       
+```           
+█▀ █▀▀ █▀█  █▄▄ █░█ █ █▀ █░█ █▀▄▀█ ▄▀█ 
+▄█ ██▄ █▄█  █▄█ █▀█ █ ▄█ █▀█ █░▀░█ █▀█ 
+           
+v2.0, @hi7endra
 
-Welcome to SEO Bhishma!
-[+] Version: 1.5.1
-[+] Author: @hi7endra
-
-This tool is my way of giving back to the community.
-Support: https://buymeacoffee.com/rathorehitendra
+Giving back to the community.
+Support: https://t.ly/hitendra
 
 ╭────┬────────────────────╮
 │ 1. │ GSC Probe          │
@@ -96,7 +91,7 @@ Support: https://buymeacoffee.com/rathorehitendra
 │ 9. │ Sitemap Generator  │
 │ 0. │ Exit               │
 ╰────┴────────────────────╯
-Enter your choice [1/2/3/4/5/6/7/8/9/0]:                                    
+Enter your choice [1/2/3/4/5/6/7/8/9/0]:                                  
 ```
 
 Select an option by entering the corresponding number.
