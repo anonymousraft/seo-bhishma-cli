@@ -1,15 +1,5 @@
-import click
-import pandas as pd 
+from seo_bhishma_cli.common import *
 from lxml import etree
-import gzip
-import os
-from datetime import datetime
-from rich.console import Console
-from rich.prompt import Prompt
-from rich.progress import Progress
-from rich import print as rprint
-from rich.panel import Panel
-from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
 
 console = Console()
 

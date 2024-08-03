@@ -1,15 +1,8 @@
-import requests
+from seo_bhishma_cli.common import *
 from bs4 import BeautifulSoup
-import pandas as pd
-import click
 from concurrent.futures import ThreadPoolExecutor
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
-from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn, TimeRemainingColumn
-from datetime import datetime
-from rich.panel import Panel
-from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
 
 console = Console()
 

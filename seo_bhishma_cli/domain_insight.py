@@ -1,33 +1,18 @@
-import os
-import requests
-import gzip
-import pandas as pd
+from seo_bhishma_cli.common import *
 import socket
-import requests
 import dns.resolver
 import whois
-import click
-import datetime
-import time
 import re
 import sublist3r
-from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from ipwhois import IPWhois
 from geopy.geocoders import Nominatim
 from fake_useragent import UserAgent
-from rich.console import Console
-from rich.panel import Panel
-from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
-from rich.progress import Progress, SpinnerColumn, TextColumn, track
 from Wappalyzer import Wappalyzer, WebPage
-from requests_html import HTMLSession
 from browserforge.headers import HeaderGenerator
 from tempfile import NamedTemporaryFile
 import asyncio
-from pathlib import Path
 from playwright.async_api import async_playwright
-import subprocess
 
 # Initialize rich console
 console = Console()
@@ -51,9 +36,9 @@ def install_playwright_binaries():
     if not pb_checks():
         try:
             subprocess.run(["playwright", "install"], check=True)
-            print("Playwright binaries installed successfully.")
+            console.print("Playwright binaries installed successfully.")
         except Exception as e:
-            print(f"An error occurred while installing Playwright binaries: {e}")
+            console.print(f"An error occurred while installing Playwright binaries: {e}")
             exit(1)
 
 # Global variable to store the domain for the session

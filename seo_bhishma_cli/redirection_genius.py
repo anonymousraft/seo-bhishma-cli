@@ -1,24 +1,11 @@
-import pandas as pd
+from seo_bhishma_cli.common import *
 import numpy as np
-import click
-from datetime import datetime
-from rich.console import Console
-from rich.progress import Progress, BarColumn, TimeRemainingColumn
-from rich.logging import RichHandler
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from difflib import SequenceMatcher
 import spacy
 from spacy.cli import download
-from urllib.parse import urlparse
-import requests
-import os
-import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import time
-import signal
-from rich.panel import Panel
-from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
 
 # Ensure the spaCy model is available
 def ensure_spacy_model(model_name):

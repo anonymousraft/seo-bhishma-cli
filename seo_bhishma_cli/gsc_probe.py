@@ -1,21 +1,8 @@
-import os
+from seo_bhishma_cli.common import *
 import pickle
-import csv
-import requests
-import time
-import click
-import pandas as pd
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
-from rich.console import Console
-from rich.panel import Panel
-from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
-from rich.progress import Progress, BarColumn, TimeRemainingColumn
-from rich.logging import RichHandler
-import signal
-import logging
-import json
 from datetime import datetime, timedelta, timezone
 
 # Setup logging

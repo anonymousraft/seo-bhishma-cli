@@ -1,20 +1,11 @@
+from seo_bhishma_cli.common import *
 from openai import OpenAI
-import click
-import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN, SpectralClustering
 from sklearn.metrics import silhouette_score
 from datetime import datetime
-from rich.panel import Panel
-from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
-import os
 import numpy as np
-import time
 import yaml
-from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn
-from rich.prompt import Prompt
-import logging
 
 # Suppress detailed httpx logs
 logging.getLogger("httpx").setLevel(logging.WARNING)

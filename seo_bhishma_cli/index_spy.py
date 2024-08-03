@@ -1,32 +1,36 @@
-import requests
-import pandas as pd
-import click
-import random
-import time
+from seo_bhishma_cli.common import *
 from itertools import cycle
 from bs4 import BeautifulSoup
-from datetime import datetime
-import signal
-import sys
-from rich.console import Console
-from rich.progress import track
-from rich.prompt import Prompt
-from rich.panel import Panel
-from seo_bhishma_cli.constants import CLI_NAME, CLI_VERSION, CLI_AUTHOR
-from rich.progress import Progress, SpinnerColumn, TextColumn
 from requests_html import HTMLSession
 from browserforge.headers import HeaderGenerator
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.proxy import Proxy, ProxyType
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.common.exceptions import NoSuchWindowException, WebDriverException
+import asyncio
+import subprocess
+from pathlib import Path
+from playwright.async_api import async_playwright
+from bs4 import BeautifulSoup
 
 console = Console()
 session = None
 driver = None
+
+def pb_checks():
+    playwright_cache_dir = Path.home() / ".cache" / "ms-playwright"
+    
+    if not playwright_cache_dir.exists():
+        # Additional check for Windows where the cache might be stored in a different location
+        playwright_cache_dir = Path.home() / "AppData" / "Local" / "ms-playwright"
+    
+    return playwright_cache_dir.exists() and any(playwright_cache_dir.iterdir())
+
+
+def install_playwright_binaries():
+    if not pb_checks():
+        try:
+            subprocess.run(["playwright", "install"], check=True)
+            console.print("Playwright binaries installed successfully.")
+        except Exception as e:
+            console.print(f"An error occurred while installing Playwright binaries: {e}")
+            exit(1)
 
 def load_proxies(proxy_file):
     try:
@@ -37,9 +41,51 @@ def load_proxies(proxy_file):
         console.print(f"[red][-] File not found: {proxy_file}. Please enter a valid file path.[/red]")
         return None
 
+async def validate_proxy_playwright(proxy, url, proxy_mode, retries=3):
+    async with async_playwright() as p:
+        for protocol in proxy_mode:
+            proxy_server = f"{protocol}://{proxy}"
+            for attempt in range(retries):
+                browser = None
+                try:
+                    console.print(f"[blue][+] Attempt {attempt + 1}: Launching browser with proxy {proxy_server}[/blue]")
+                    browser = await p.chromium.launch(
+                        proxy={
+                            "server": proxy_server,
+                            }
+                        )
+                    # browser = await p.chromium.launch(proxy={"server": "per-context"})
+                    context = await browser.new_context()
+                    page = await context.new_page()
+                    console.print(f"[blue][+] Attempt {attempt + 1}: Navigating to {url}[/blue]")
+                    await page.goto(url, timeout=60000)
+                    content = await page.content()
+                    console.print(f"[blue][+] Attempt {attempt + 1}: Page content retrieved[/blue]")
+
+                    if "captcha" not in content.lower():
+                        console.print(f"[green][+] Valid Proxy: {proxy} for Playwright on attempt {attempt + 1}[/blue]")
+                        await browser.close()
+                        return {protocol: proxy_server}
+                    else:
+                        print(f"[red][-] Proxy {proxy} returned captcha on attempt {attempt + 1}[/red]")
+                        await browser.close()
+                        break
+                except Exception as e:
+                    console.print(f"[red][-] Proxy {proxy} failed with error: {e} on attempt {attempt + 1}[/red]")
+                    if "net::ERR_TUNNEL_CONNECTION_FAILED" in str(e) or "net::ERR_PROXY_CONNECTION_FAILED" in str(e):
+                        console.print(f"[red][-] Proxy {proxy} encountered a tunnel or connection error on attempt {attempt + 1}. Retrying...[/red]")
+                    else:
+                        break
+                finally:
+                    if browser:
+                        await context.close()
+                        await browser.close()
+    return None
+
 def validate_proxy(proxy, url, proxy_mode, method_choice):
-    global session
     if method_choice == 'HTMLSession':
+        # Original HTMLSession-based implementation
+        global session
         if session:
             session.close()
         session = HTMLSession()
@@ -61,18 +107,8 @@ def validate_proxy(proxy, url, proxy_mode, method_choice):
             except requests.RequestException as e:
                 console.print(f"[red][-] Proxy {proxy} failed with error: {e}[/red]")
     else:
-        for protocol in proxy_mode:
-            proxies = {protocol: f"{protocol}://{proxy}"}
-            try:
-                options = Options()
-                options.add_argument('--proxy-server=%s' % proxies[protocol])
-                driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-                driver.quit()
-                console.print(f"[blue][+] Valid Proxy: {proxy} for Selenium[/blue]")
-                return proxies
-            except Exception as e:
-                console.print(f"[red][-] Proxy {proxy} failed with error: {e}[/red]")
-    return None
+        return asyncio.run(validate_proxy_playwright(proxy, url, proxy_mode))
+
 
 def proxy_generator(proxies):
     for proxy in cycle(proxies):
@@ -244,77 +280,69 @@ def parse_indexing_status(response, url):
     
     return "Not Indexed"
 
-def check_indexing_status_selenium(url, proxy=None, captcha_handling_choice=None, headless=False):
-    global driver
-    options = Options()
-    if headless:
-        options.add_argument("--headless")
-        options.add_argument("--disable-gpu")
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-    options.add_argument('--log-level=3')
-    options.add_argument('--silent')
-    options.add_experimental_option('excludeSwitches', ['enable-logging'])
-    
-    if proxy:
-        prox = Proxy()
-        prox.proxy_type = ProxyType.MANUAL
-        prox.http_proxy = proxy['http'] if 'http' in proxy else proxy['https']
-        prox.ssl_proxy = proxy['https'] if 'https' in proxy else proxy['http']
-        options.proxy = prox
-        options.add_argument(f'--proxy-server={proxy}')
+async def check_indexing_status_playwright(url, proxy=None, captcha_handling_choice=None, headless=False):
+    async with async_playwright() as p:
+        browser_options = {
+            "headless": headless,
+            "args": [
+                "--disable-gpu",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--log-level=3"
+            ]
+        }
+        
+        if proxy:
+            browser_options["proxy"] = {
+                "server": proxy['http'] if 'http' in proxy else proxy['https']
+            }
 
-    if driver is None:
-        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-    else:
-        driver.get("about:blank")
+        browser = await p.chromium.launch(**browser_options)
+        page = await browser.new_page()
 
-    try:
-        search_url = f"https://www.google.com/search?q=site:{url}"
-        driver.get(search_url)
-        time.sleep(5)
+        try:
+            search_url = f"https://www.google.com/search?q=site:{url}"
+            await page.goto(search_url)
+            await page.wait_for_timeout(5000)  # Wait for 5 seconds
 
-        if "captcha" in driver.page_source.lower():
-            if not headless and captcha_handling_choice == 'By user':
-                console.print("[yellow][-] Captcha encountered! Please solve the captcha in the browser window.[/yellow]")
-                while "captcha" in driver.page_source.lower():
-                    try:
-                        time.sleep(5)
-                    except (NoSuchWindowException, WebDriverException):
-                        handle_browser_close()
-                        break
-                return check_indexing_status_selenium(url, proxy, captcha_handling_choice, headless)
-            else:
-                console.print("[yellow][-] Captcha encountered! Waiting for 60 seconds...[/yellow]")
-                time.sleep(60)
-                return "Captcha Encountered"
+            page_content = await page.content()
+            if "captcha" in page_content.lower():
+                if not headless and captcha_handling_choice == 'By user':
+                    print("[yellow][-] Captcha encountered! Please solve the captcha in the browser window.[/yellow]")
+                    while "captcha" in await page.content().lower():
+                        try:
+                            await page.wait_for_timeout(5000)
+                        except:
+                            await browser.close()
+                            return None
+                    return await check_indexing_status_playwright(url, proxy, captcha_handling_choice, headless)
+                else:
+                    print("[yellow][-] Captcha encountered! Waiting for 60 seconds...[/yellow]")
+                    await page.wait_for_timeout(60000)
+                    return "Captcha Encountered"
 
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
-        no_results_message = soup.find("p", role="heading")
-        if no_results_message and "did not match any documents" in no_results_message.text.lower():
+            soup = BeautifulSoup(page_content, 'html.parser')
+            no_results_message = soup.find("p", role="heading")
+            if no_results_message and "did not match any documents" in no_results_message.text.lower():
+                return "Not Indexed"
+
+            search_results = soup.find_all('div', class_='g')
+            for result in search_results:
+                link = result.find('a', href=True)
+                if link and url in link['href']:
+                    return "Indexed"
+
             return "Not Indexed"
-
-        search_results = soup.find_all('div', class_='g')
-        for result in search_results:
-            link = result.find('a', href=True)
-            if link and url in link['href']:
-                return "Indexed"
-
-        return "Not Indexed"
-    except NoSuchWindowException:
-        handle_browser_close()
-        return "Browser Closed"
-    except WebDriverException as e:
-        if "net::ERR_TUNNEL_CONNECTION_FAILED" in str(e):
-            console.print(f"[red]Selenium Error: {e} - Changing Proxy[/red]")
-            return "Proxy Error"
-        else:
-            console.print(f"[red]Selenium Error: {e}[/red]")
-            return f"Error: {e}"
-    finally:
-        if driver:
-            driver.quit()
-            driver = None
+        except Exception as e:
+            if "net::ERR_TUNNEL_CONNECTION_FAILED" in str(e):
+                print(f"[red]Playwright Error: {e} - Changing Proxy[/red]")
+                return "Proxy Error"
+            else:
+                print(f"[red]Playwright Error: {e}[/red]")
+                return f"Error: {e}"
+        finally:
+            await browser.close()
+            
 
 def read_input_file(file_path):
     try:
@@ -458,6 +486,7 @@ def index_spy(ctx):
 
             headless = False
             if method_choice == 'Selenium':
+                install_playwright_binaries()
                 headless = Prompt.ask("[cyan]Do you want to run Selenium in headless mode?[/cyan]", default="no").lower() == "yes"
 
             captcha_handling_choice = None
@@ -498,14 +527,16 @@ def index_spy(ctx):
                     if method_choice == 'HTMLSession':
                         status = check_indexing_status_htmlsession(url, valid_proxies, captcha_service, captcha_key, rate_limit)
                     else:
-                        status = check_indexing_status_selenium(url, valid_proxies, captcha_handling_choice=captcha_handling_choice, headless=headless)
+                        # status = check_indexing_status_selenium(url, valid_proxies, captcha_handling_choice=captcha_handling_choice, headless=headless)
+                        status = asyncio.run(check_indexing_status_playwright(url, valid_proxies, captcha_handling_choice=captcha_handling_choice, headless=headless))
                         if status == "Proxy Error":
                             validated = False
                             while not validated:
                                 validated, valid_proxies, proxy_gen = proxy_validation_check(proxy_gen, proxy_mode, method_choice, start_index)
                                 if validated:
                                     console.print(f"[blue][+] Using Proxy: {valid_proxies}[/blue]")
-                                    status = check_indexing_status_selenium(url, valid_proxies, captcha_handling_choice=captcha_handling_choice, headless=headless)
+                                    status = asyncio.run(check_indexing_status_playwright(url, valid_proxies, captcha_handling_choice=captcha_handling_choice, headless=headless))
+                                    #status = check_indexing_status_selenium(url, valid_proxies, captcha_handling_choice=captcha_handling_choice, headless=headless)
                                     if "Captcha Encountered" not in status and "Proxy Error" not in status:
                                         break
 
@@ -513,7 +544,8 @@ def index_spy(ctx):
                     if method_choice == 'HTMLSession':
                         status = check_indexing_status_htmlsession(url, None, captcha_service, captcha_key, 10)
                     else:
-                        status = check_indexing_status_selenium(url, captcha_handling_choice=captcha_handling_choice, headless=headless)
+                        #status = check_indexing_status_selenium(url, captcha_handling_choice=captcha_handling_choice, headless=headless)
+                        status = asyncio.run(check_indexing_status_playwright(url, valid_proxies, captcha_handling_choice=captcha_handling_choice, headless=headless))
 
                 if "Captcha Encountered" in status:
                     if use_proxy and not (method_choice == 'Selenium' and captcha_handling_choice == 'By user'):
@@ -528,7 +560,8 @@ def index_spy(ctx):
                                 if method_choice == 'HTMLSession':
                                     status = check_indexing_status_htmlsession(url, valid_proxies, captcha_service, captcha_key, rate_limit)
                                 else:
-                                    status = check_indexing_status_selenium(url, valid_proxies, captcha_handling_choice=captcha_handling_choice, headless=headless)
+                                    # status = check_indexing_status_selenium(url, valid_proxies, captcha_handling_choice=captcha_handling_choice, headless=headless)
+                                    status = asyncio.run(check_indexing_status_playwright(url, valid_proxies, captcha_handling_choice=captcha_handling_choice, headless=headless))
                                 if "Captcha Encountered" not in status and "Proxy Error" not in status:
                                     break
                         if not validated:
@@ -537,7 +570,8 @@ def index_spy(ctx):
                             if method_choice == 'HTMLSession':
                                 status = check_indexing_status_htmlsession(url, None, captcha_service, captcha_key, 10)
                             else:
-                                status = check_indexing_status_selenium(url, captcha_handling_choice=captcha_handling_choice, headless=headless)
+                                # status = check_indexing_status_selenium(url, captcha_handling_choice=captcha_handling_choice, headless=headless)
+                                status = asyncio.run(check_indexing_status_playwright(url, valid_proxies, captcha_handling_choice=captcha_handling_choice, headless=headless))
                             if "Captcha Encountered" in status:
                                 console.print("[red][-] Captcha issue persists. Saving progress and exiting...[/red]")
                                 save_progress(results, output_file)
@@ -550,7 +584,8 @@ def index_spy(ctx):
                             if method_choice == 'HTMLSession':
                                 status = check_indexing_status_htmlsession(url, None, captcha_service, captcha_key, 10)
                             else:
-                                status = check_indexing_status_selenium(url, captcha_handling_choice=captcha_handling_choice, headless=headless)
+                                # status = check_indexing_status_selenium(url, captcha_handling_choice=captcha_handling_choice, headless=headless)
+                                status = asyncio.run(check_indexing_status_playwright(url, valid_proxies, captcha_handling_choice=captcha_handling_choice, headless=headless))
 
                 if captcha_failure_count >= 3 and not use_proxy and not (method_choice == 'Selenium' and captcha_handling_choice == 'By user'):
                     console.print("[red][-] Too many captcha encounters. Saving progress and exiting...[/red]")
