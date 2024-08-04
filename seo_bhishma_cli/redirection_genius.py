@@ -6,6 +6,7 @@ from difflib import SequenceMatcher
 import spacy
 from spacy.cli import download
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 
 # Ensure the spaCy model is available
 def ensure_spacy_model(model_name):

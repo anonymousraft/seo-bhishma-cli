@@ -9,7 +9,6 @@ import json
 import time
 import signal
 import csv
-from datetime import datetime
 from urllib.parse import urlparse
 from pathlib import Path
 import subprocess

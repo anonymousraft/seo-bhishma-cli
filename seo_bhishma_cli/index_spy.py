@@ -8,6 +8,7 @@ import subprocess
 from pathlib import Path
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
+from datetime import datetime
 
 console = Console()
 session = None
@@ -26,8 +27,8 @@ def pb_checks():
 def install_playwright_binaries():
     if not pb_checks():
         try:
-            subprocess.run(["playwright", "install"], check=True)
-            console.print("Playwright binaries installed successfully.")
+            subprocess.run(["python", "-m", "playwright", "install", "chromium"], check=True)
+            print("Chromium browser installed successfully for Playwright.")
         except Exception as e:
             console.print(f"An error occurred while installing Playwright binaries: {e}")
             exit(1)
