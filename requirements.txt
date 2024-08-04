@@ -3,7 +3,6 @@ requests
 beautifulsoup4 
 pandas 
 art
-tqdm
 lxml
 scikit-learn
 openai
@@ -23,5 +22,5 @@ fake-useragent
 python-wappalyzer
 requests-html
 lxml_html_clean
-browserforge[all]
+browserforge
 playwright
