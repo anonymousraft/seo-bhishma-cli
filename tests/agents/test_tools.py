@@ -58,6 +58,39 @@ def test_get_auth_tier_unknown_defaults_to_confirm_each() -> None:
     assert get_auth_tier("nonexistent_tool") == "confirm_each"
 
 
+def test_silencer_suppresses_stdout_and_stderr_during_tool_calls(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The wrapper installed in ``agents/tools.py`` must keep tool output off the user's terminal."""
+    cb_tool = next(t for t in ALL_TOOLS if t.name == "check_backlink")
+
+    def noisy(*args, **kwargs):
+        import sys
+
+        print("LEAK to stdout", flush=True)
+        print("LEAK to stderr", file=sys.stderr, flush=True)
+        return {"backlink_url": "x", "target_url": "y", "status": "Live",
+                "anchor_status": "Present", "link_exists": "Yes"}
+
+    with patch("seo_bhishma.agents.tools._ls.check_backlink", side_effect=noisy):
+        cb_tool.invoke({"backlink_url": "x", "target_url": "y"})
+
+    captured = capsys.readouterr()
+    assert "LEAK" not in captured.out
+    assert "LEAK" not in captured.err
+
+
+def test_silencer_converts_exceptions_to_error_dict() -> None:
+    """A core function that raises should surface as ``{"error": ...}`` not crash the agent."""
+    cb_tool = next(t for t in ALL_TOOLS if t.name == "check_backlink")
+    with patch(
+        "seo_bhishma.agents.tools._ls.check_backlink",
+        side_effect=RuntimeError("boom"),
+    ):
+        result = cb_tool.invoke({"backlink_url": "x", "target_url": "y"})
+    assert result == {"error": "RuntimeError: boom"}
+
+
 def test_check_backlink_tool_invokes_core() -> None:
     """The ``check_backlink`` tool wrapper delegates to ``core.link_sniper.check_backlink``."""
     cb_tool = next(t for t in ALL_TOOLS if t.name == "check_backlink")
@@ -88,11 +121,18 @@ def test_check_backlink_tool_invokes_core() -> None:
 
 
 def test_cluster_keywords_enforces_cap() -> None:
-    """Cluster keyword tool should reject inputs >500 to prevent runaway API spend."""
+    """Cluster keyword tool should reject inputs >500 to prevent runaway API spend.
+
+    The agent-facing tools are wrapped by ``_silence`` in ``agents/tools.py``,
+    which converts any raised exception into a clean ``{"error": ...}`` dict
+    so the model sees a structured result rather than a stack trace.
+    """
     ck_tool = next(t for t in ALL_TOOLS if t.name == "cluster_keywords")
     keywords = [f"keyword {i}" for i in range(501)]
-    with pytest.raises(ValueError, match="cap exceeded"):
-        ck_tool.invoke({"keywords": keywords})
+    result = ck_tool.invoke({"keywords": keywords})
+    assert isinstance(result, dict)
+    assert "error" in result
+    assert "cap exceeded" in result["error"]
 
 
 def test_cluster_keywords_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -100,5 +140,7 @@ def test_cluster_keywords_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.delenv("SEO_BHISHMA_OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("SEO_BHISHMA_OPENAI_API_KEY", "")
     ck_tool = next(t for t in ALL_TOOLS if t.name == "cluster_keywords")
-    with pytest.raises(ValueError, match="SEO_BHISHMA_OPENAI_API_KEY"):
-        ck_tool.invoke({"keywords": ["one", "two"]})
+    result = ck_tool.invoke({"keywords": ["one", "two"]})
+    assert isinstance(result, dict)
+    assert "error" in result
+    assert "SEO_BHISHMA_OPENAI_API_KEY" in result["error"]

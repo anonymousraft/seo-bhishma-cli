@@ -564,6 +564,40 @@ _tag(_CONFIRM_ONCE, "confirm_once")
 _tag(_CONFIRM_EACH, "confirm_each")
 
 
+def _silence(tool):
+    """Wrap a LangChain tool so it can't crash the chat or leak stdout/stderr.
+
+    Many of the underlying SEO libraries (sublist3r, whois, requests-html, etc.)
+    print directly to stdout/stderr or raise uncaught thread exceptions. The
+    wrapper redirects both streams to discarded buffers during the call and
+    coerces any exception into a clean ``{"error": ...}`` dict so the agent
+    sees a structured result instead of a stack trace.
+    """
+    import contextlib
+    import io as _io
+
+    original = tool.func
+
+    def _wrapped(*args, **kwargs):
+        # `contextlib.redirect_*` rebinds ``sys.stdout`` / ``sys.stderr`` for
+        # the duration, so any thread that resolves them at write-time sees the
+        # discarded buffer too. This handles sublist3r-style worker threads.
+        with contextlib.redirect_stdout(_io.StringIO()), contextlib.redirect_stderr(_io.StringIO()):
+            try:
+                return original(*args, **kwargs)
+            except Exception as e:
+                return {"error": f"{type(e).__name__}: {e}"}
+
+    _wrapped.__name__ = getattr(original, "__name__", "tool")
+    _wrapped.__doc__ = getattr(original, "__doc__", None)
+    tool.func = _wrapped
+    return tool
+
+
+for _tool in _AUTO + _CONFIRM_ONCE + _CONFIRM_EACH:
+    _silence(_tool)
+
+
 ALL_TOOLS: list = _AUTO + _CONFIRM_ONCE + _CONFIRM_EACH
 
 

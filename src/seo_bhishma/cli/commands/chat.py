@@ -12,17 +12,20 @@ Wraps :func:`seo_bhishma.agents.graph.build_agent` in a Rich REPL with:
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
 
 import click
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
+from rich.live import Live
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.syntax import Syntax
 from rich.table import Table
+from rich.text import Text
 
 from seo_bhishma.agents.graph import (
     ToolAuthSession,
@@ -77,64 +80,118 @@ def _render_tool_args(args: dict) -> str:
     return ", ".join(parts)
 
 
-def _render_tool_result(content: str) -> None:
-    """Try to render a tool result as a Rich table; fall back to syntax-highlighted JSON."""
+def _silence_noisy_loggers() -> None:
+    """Stop core/tool error logs from leaking onto the chat surface.
+
+    Anything that should reach the user comes through tool result panels or
+    explicit ``console.print`` calls. Internal ``logger.error(...)`` lines
+    are still useful in debug mode but they have no business being printed
+    next to assistant tokens during a chat turn.
+    """
+    for name in (
+        "seo_bhishma",
+        "sublist3r",
+        "httpx",
+        "httpcore",
+        "openai",
+        "anthropic",
+        "urllib3",
+    ):
+        logger = logging.getLogger(name)
+        logger.setLevel(logging.CRITICAL + 1)
+        logger.propagate = False
+
+
+def _render_tool_result(tool_name: str, content: str) -> None:
+    """Render a single tool result in a compact Rich Panel.
+
+    Detects ``{"error": "..."}`` shape (produced by the silencer in
+    ``agents/tools.py``) and renders with a red ✗ instead of green ✓.
+    """
     try:
         data = json.loads(content) if isinstance(content, str) else content
     except (json.JSONDecodeError, TypeError):
-        console.print(Panel(content, border_style="dim", title="tool result", title_align="left"))
-        return
+        data = content
 
-    # Special-cases for common tool result shapes
+    is_error = isinstance(data, dict) and "error" in data and len(data) == 1
+    if is_error:
+        body = Text.from_markup(f"[red]✗ {data['error']}[/red]")
+        border = "red"
+        title_icon = "[red]✗[/red]"
+    else:
+        body = _format_result_body(data)
+        border = "green"
+        title_icon = "[green]✓[/green]"
+
+    console.print(
+        Panel(
+            body,
+            title=f"{title_icon} {tool_name}",
+            title_align="left",
+            border_style=border,
+            padding=(0, 1),
+        )
+    )
+
+
+def _format_result_body(data):
+    """Render the inside of a successful tool-result panel."""
     if isinstance(data, dict):
+        # Tabular preview if the tool returned a `head: [{...}]` shape.
         if "head" in data and isinstance(data["head"], list) and data["head"]:
-            _render_table(data["head"], title="head")
+            preview = _format_table(data["head"], title="preview (first rows)")
             extras = {k: v for k, v in data.items() if k != "head"}
-            if extras:
-                _render_kv(extras)
-            return
+            return _stack(preview, _format_kv(extras) if extras else None)
         if "sample_urls" in data and isinstance(data["sample_urls"], list):
-            console.print(
-                Panel(
-                    "\n".join(data["sample_urls"][:20]),
-                    title=f"sample of {len(data['sample_urls'])} URLs",
-                    border_style="dim",
-                )
-            )
+            text = Text("\n".join(data["sample_urls"][:20]))
             extras = {k: v for k, v in data.items() if k != "sample_urls"}
-            if extras:
-                _render_kv(extras)
-            return
-        _render_kv(data)
-        return
+            return _stack(text, _format_kv(extras) if extras else None)
+        return _format_kv(data)
 
     if isinstance(data, list) and data and isinstance(data[0], dict):
-        _render_table(data, title="tool result")
-        return
+        return _format_table(data, title="tool result")
 
     pretty = json.dumps(data, indent=2, default=str)
-    console.print(Syntax(pretty, "json", theme="ansi_dark", line_numbers=False))
+    return Syntax(pretty, "json", theme="ansi_dark", line_numbers=False, padding=0)
 
 
-def _render_kv(data: dict) -> None:
-    table = Table(show_header=False, box=None, padding=(0, 2))
+def _stack(*items):
+    """Stack multiple Rich renderables with a blank line between them."""
+    from rich.console import Group
+
+    parts = []
+    for item in items:
+        if item is None:
+            continue
+        if parts:
+            parts.append(Text(""))
+        parts.append(item)
+    return Group(*parts) if parts else Text("")
+
+
+def _format_kv(data: dict) -> Table:
+    table = Table(show_header=False, box=None, padding=(0, 1))
     table.add_column(style="cyan", no_wrap=True)
     table.add_column()
     for k, v in data.items():
         if isinstance(v, (dict, list)):
-            v = json.dumps(v, default=str)[:160]
+            v = json.dumps(v, default=str)
+            if len(v) > 160:
+                v = v[:157] + "…"
+        elif v is None or v == "":
+            v = "[dim](empty)[/dim]"
         table.add_row(str(k), str(v))
-    console.print(table)
+    return table
 
 
-def _render_table(rows: list[dict], title: str = "") -> None:
+def _format_table(rows: list[dict], title: str = "") -> Table:
     columns = list(rows[0].keys())
-    table = Table(title=title or None, header_style="bold")
+    table = Table(title=title or None, header_style="bold", title_style="dim")
     for col in columns:
         table.add_column(col)
     for row in rows:
         table.add_row(*[str(row.get(c, "")) for c in columns])
-    console.print(table)
+    return table
 
 
 # ---------------------------------------------------------------------------
@@ -177,13 +234,11 @@ class ChatSession:
         input_payload: dict | None = {"messages": [HumanMessage(content=user_message)]}
 
         while True:
-            # Stream this segment of the run.
             self._stream_until_interrupt(input_payload)
             input_payload = None  # subsequent loops resume from checkpoint
 
             state = self.agent.get_state(self.config)
             if "tools" not in (state.next or ()):
-                # Run is done.
                 self._record_last_ai_message(state)
                 return
 
@@ -191,64 +246,125 @@ class ChatSession:
             pending = classify_tool_calls(messages)
             blocking = needs_user_confirmation(pending, self.auth)
 
+            # Render the pending tool calls as a small panel each, so the user
+            # sees exactly what the model is about to run.
             for call in pending:
-                style = _TIER_STYLE.get(call.tier, "")
-                console.print(
-                    f"[{style}][tool] {call.name}({_render_tool_args(call.args)})[/{style}]"
-                )
+                self._print_tool_call_header(call)
 
-            # Authorize the blocking calls.
             denied: list[str] = []
             for call in blocking:
-                allow = self._ask_auth(call.name, call.tier)
+                allow = self._ask_auth(call.name, call.tier, call.args)
                 if call.tier == "confirm_once":
                     self.auth.remember(call.name, allow)
                 if not allow:
                     denied.append(call.name)
 
             if denied:
-                # Inject synthetic ToolMessages so the LLM knows the calls were
-                # refused, then continue the run.
                 self._inject_denials(messages, denied)
-                input_payload = None  # state already updated
+                input_payload = None
 
     # -- streaming ----------------------------------------------------------
 
     def _stream_until_interrupt(self, input_payload: dict | None) -> None:
-        """Stream the agent, printing token-level updates for the assistant turn."""
-        printed_any_chunk = False
-        with console.status("[dim]thinking…[/dim]", spinner="dots"):
-            try:
-                events = self.agent.stream(
-                    input_payload,
-                    self.config,
-                    stream_mode=["messages", "values"],
-                )
-                for kind, payload in events:
-                    if kind == "messages":
-                        msg_chunk, _meta = payload
-                        text = getattr(msg_chunk, "content", "") or ""
-                        if isinstance(text, list):
-                            text = "".join(
-                                part.get("text", "")
-                                for part in text
-                                if isinstance(part, dict)
-                            )
-                        if text and isinstance(msg_chunk, AIMessage):
-                            if not printed_any_chunk:
-                                console.print()
-                                printed_any_chunk = True
-                            console.print(text, end="", soft_wrap=True)
-                    elif kind == "values":
-                        # On tool messages, render the latest tool result.
-                        messages = payload.get("messages", [])
-                        if messages and isinstance(messages[-1], ToolMessage):
-                            _render_tool_result(messages[-1].content)
-            except Exception as e:
-                console.print(f"\n[bold red][-] Agent error: {e}[/bold red]")
+        """Stream the agent. Renders assistant tokens as live Markdown and tool
+        results in their own Panels — exactly once each.
+        """
+        seen_tool_ids: set[str] = set()
+        buffer: str = ""
+        live: Live | None = None
+        spinner_shown = True
 
-        if printed_any_chunk:
-            console.print()  # trailing newline after streamed tokens
+        def start_or_update_live() -> None:
+            """Open the Markdown live region (or update it) with the current buffer."""
+            nonlocal live, spinner_shown
+            if spinner_shown:
+                # First assistant token — make room for the Live region.
+                spinner_shown = False
+            if live is None:
+                live = Live(
+                    Markdown(buffer or " "),
+                    console=console,
+                    refresh_per_second=12,
+                    transient=False,
+                    auto_refresh=False,
+                )
+                live.start()
+            live.update(Markdown(buffer or " "), refresh=True)
+
+        def close_live() -> None:
+            """Commit the current Markdown region to scrollback and reset."""
+            nonlocal live, buffer
+            if live is not None:
+                live.update(Markdown(buffer), refresh=True)
+                live.stop()
+                live = None
+            buffer = ""
+
+        status = console.status("[dim]thinking…[/dim]", spinner="dots")
+        status.start()
+
+        try:
+            events = self.agent.stream(
+                input_payload,
+                self.config,
+                stream_mode=["messages", "values"],
+            )
+            for kind, payload in events:
+                if kind == "messages":
+                    chunk, _meta = payload
+                    if not isinstance(chunk, (AIMessage, AIMessageChunk)):
+                        continue
+                    text = _extract_text(chunk.content)
+                    if not text:
+                        continue
+                    if spinner_shown:
+                        status.stop()
+                    buffer += text
+                    start_or_update_live()
+
+                elif kind == "values":
+                    messages = payload.get("messages", [])
+                    if not messages:
+                        continue
+                    last = messages[-1]
+                    if not isinstance(last, ToolMessage):
+                        continue
+                    tool_id = getattr(last, "tool_call_id", None) or id(last)
+                    if tool_id in seen_tool_ids:
+                        continue
+                    seen_tool_ids.add(tool_id)
+                    # Close the in-flight assistant block before printing the
+                    # tool result so they don't fight for the same screen region.
+                    close_live()
+                    if spinner_shown:
+                        status.stop()
+                        spinner_shown = False
+                    _render_tool_result(getattr(last, "name", "tool"), last.content)
+        except Exception as e:
+            close_live()
+            if spinner_shown:
+                status.stop()
+            console.print(
+                Panel(
+                    Text.from_markup(f"[red]{type(e).__name__}: {e}[/red]"),
+                    title="[red]Agent error[/red]",
+                    title_align="left",
+                    border_style="red",
+                )
+            )
+        finally:
+            close_live()
+            if spinner_shown:
+                # Stream ended before any AI tokens were produced (e.g. agent
+                # paused at the tools node immediately). Tear the spinner down.
+                status.stop()
+
+    def _print_tool_call_header(self, call) -> None:
+        """Render the dimmed ``→ tool_name(args)`` line that introduces a tool call."""
+        style = _TIER_STYLE.get(call.tier, "dim")
+        args_summary = _render_tool_args(call.args)
+        suffix = f"({args_summary})" if args_summary else "()"
+        console.print(f"[{style}]→ {call.name}{suffix}[/{style}]")
 
     def _record_last_ai_message(self, state) -> None:
         messages = state.values.get("messages", [])
@@ -279,14 +395,47 @@ class ChatSession:
 
     # -- authorization UI --------------------------------------------------
 
-    def _ask_auth(self, tool_name: str, tier: str) -> bool:
+    def _ask_auth(self, tool_name: str, tier: str, args: dict | None = None) -> bool:
         note = {
-            "confirm_once": "(decision remembered for this session)",
-            "confirm_each": "(asked every time it writes a file)",
+            "confirm_once": "Decision remembered for this session.",
+            "confirm_each": "Asked every time (writes a file).",
         }.get(tier, "")
-        prompt = f"[bold]Allow `{tool_name}`?[/bold] {note}"
-        answer = Prompt.ask(prompt, choices=["y", "n"], default="y")
+        args_summary = _render_tool_args(args or {}) or "(no arguments)"
+
+        lines: list[str] = [
+            f"[bold]{tool_name}[/bold]",
+            f"[dim]{args_summary}[/dim]",
+        ]
+        if note:
+            lines.append(f"[dim]{note}[/dim]")
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title="[yellow]⏵ Tool authorization[/yellow]",
+                title_align="left",
+                border_style="yellow",
+                padding=(0, 1),
+            )
+        )
+        answer = Prompt.ask("Allow", choices=["y", "n"], default="y")
         return answer == "y"
+
+
+def _extract_text(content) -> str:
+    """Pull the text payload out of an ``AIMessageChunk.content``.
+
+    OpenAI streams give us ``str`` chunks. Anthropic streams give us a list of
+    ``{"type": "text", "text": "..."}`` dicts; we concatenate the text parts.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            part.get("text", "")
+            for part in content
+            if isinstance(part, dict) and part.get("type") in (None, "text")
+        )
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -369,6 +518,7 @@ def _save_transcript(session: ChatSession, path: str) -> None:
 @click.option("--model", default=None, help="Override LLM model (e.g. gpt-4o, claude-sonnet-4-5).")
 def chat(model: str | None) -> None:
     """Chat with the SEO Bhishma AI agent."""
+    _silence_noisy_loggers()
     try:
         session = ChatSession(model=model)
     except LlmConfigError as e:
@@ -380,8 +530,9 @@ def chat(model: str | None) -> None:
     console.print(
         tool_panel(
             f"{CLI_NAME} chat",
-            f"AI-native SEO assistant • provider={provider} • model={resolved_model}\n"
-            f"v{CLI_VERSION} — type [bold]/help[/bold] for commands, [bold]/quit[/bold] to exit.",
+            f"[bold]{resolved_model}[/bold] ([cyan]{provider}[/cyan]) • v{CLI_VERSION}\n"
+            "Ask me about SEO. I'll pick the right tool and run it for you.\n"
+            "[dim]/help for commands · /quit to exit[/dim]",
         )
     )
 
