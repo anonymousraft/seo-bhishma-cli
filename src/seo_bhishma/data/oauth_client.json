@@ -1,0 +1,10 @@
+{
+  "_README": "Public OAuth client config bundled with seo-bhishma. Per Google's OAuth 2.0 spec for installed apps, the client_id is not confidential. We use PKCE (RFC 7636) on top so no client_secret is required either.  TO ENABLE: register a Desktop-app OAuth client at https://console.cloud.google.com/apis/credentials and replace the placeholder client_id below with the value Google issues.  Users can override this with their own OAuth JSON by setting SEO_BHISHMA_GSC_CREDENTIALS_PATH.",
+  "installed": {
+    "client_id": "REPLACE_ME-PLACEHOLDER.apps.googleusercontent.com",
+    "client_secret": "",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "redirect_uris": ["http://localhost"]
+  }
+}

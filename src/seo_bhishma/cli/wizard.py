@@ -12,9 +12,7 @@ where the file landed should call :func:`seo_bhishma.cli.user_config.user_config
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable
-from pathlib import Path
 
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
@@ -291,48 +289,62 @@ def _explain_validation_failure(provider: str, result: ValidationResult) -> None
 
 
 def _section_gsc(state: UserConfig, *, step: int) -> UserConfig:
+    """Section 3: Google Search Console — opens the browser for a one-click login."""
+    from seo_bhishma.agents.google_auth import (
+        GoogleAuthError,
+        NoBundledClient,
+        do_oauth_login,
+        get_authenticated_email,
+        load_saved_credentials,
+    )
+
     _section_header(
         step,
         "Google Search Console (optional)",
         "Connect GSC to use [bold]gsc-probe[/bold] and let the AI agent answer "
         "Search Console queries.\n"
-        "You'll need an OAuth client credentials JSON file from the Google Cloud Console.",
+        "[dim]Opens your browser to grant access — about 10 seconds.[/dim]",
     )
-    if not Confirm.ask("Configure Search Console?", default=bool(state.gsc_credentials_path)):
+
+    # Already connected? Offer to skip.
+    existing = load_saved_credentials()
+    if existing is not None:
+        email = get_authenticated_email(existing) or "(account)"
+        console.print(f"[green]✓ Already connected as {email}.[/green]")
+        if not Confirm.ask("Re-authorize anyway?", default=False):
+            return state
+
+    if not Confirm.ask("Connect Search Console now?", default=False):
+        console.print(
+            "[dim]Skipped. You can do this later with [bold]seo-bhishma gsc login[/bold].[/dim]"
+        )
         return state
 
-    default_path = state.gsc_credentials_path or ""
-    while True:
-        path_str = Prompt.ask(
-            "Path to OAuth credentials JSON",
-            default=default_path,
-            show_default=bool(default_path),
-        )
-        path_str = path_str.strip()
-        if not path_str:
-            console.print("[yellow][!] No path entered — skipping GSC.[/yellow]")
-            return state
-        problem = _check_gsc_credentials(Path(path_str))
-        if problem is None:
-            return state.model_copy(update={"gsc_credentials_path": path_str})
-        console.print(f"[red][-] {problem}[/red]")
-        if not Confirm.ask("Try a different path?", default=True):
-            console.print("[yellow][!] Skipping GSC.[/yellow]")
-            return state
-
-
-def _check_gsc_credentials(path: Path) -> str | None:
-    """Lightly validate a Google OAuth client credentials file. Returns error or None."""
-    if not path.is_file():
-        return f"File not found: {path}"
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception as e:  # noqa: BLE001
-        return f"Not valid JSON: {e}"
-    installed = data.get("installed") or data.get("web")
-    if not isinstance(installed, dict) or "client_id" not in installed:
-        return "Missing 'installed.client_id' / 'web.client_id' — is this an OAuth client JSON?"
-    return None
+        creds = do_oauth_login()
+    except NoBundledClient as e:
+        console.print(
+            "[yellow][!] OAuth client not configured in this build:[/yellow] " + str(e)
+        )
+        console.print(
+            "[dim]Skipping GSC. Run [bold]seo-bhishma gsc login[/bold] after setting "
+            "[bold]gsc_credentials_path[/bold] in your config.[/dim]"
+        )
+        return state
+    except KeyboardInterrupt:
+        console.print("[yellow][!] Login cancelled — skipping GSC.[/yellow]")
+        return state
+    except (GoogleAuthError, Exception) as e:  # noqa: BLE001
+        console.print(f"[red][-] Login failed: {type(e).__name__}: {e}[/red]")
+        console.print(
+            "[dim]Skipping GSC. Try [bold]seo-bhishma gsc login --no-browser[/bold] "
+            "from a shell with internet access.[/dim]"
+        )
+        return state
+
+    email = get_authenticated_email(creds) or "(account)"
+    console.print(f"[green]✓ Connected as {email}.[/green]")
+    return state
 
 
 # ---------------------------------------------------------------------------

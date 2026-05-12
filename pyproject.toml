@@ -90,6 +90,9 @@ Tracker = "https://github.com/anonymousraft/seo-bhishma-cli/issues"
 [tool.hatch.build.targets.wheel]
 packages = ["src/seo_bhishma"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"src/seo_bhishma/data/oauth_client.json" = "seo_bhishma/data/oauth_client.json"
+
 [tool.ruff]
 target-version = "py310"
 line-length = 120

@@ -30,6 +30,13 @@ seo-bhishma config set <key> <value> # update one field; validates API keys live
 seo-bhishma config path              # print the config file path
 seo-bhishma config reset             # delete the file
 
+# Google Search Console authorization (one-time per machine)
+seo-bhishma gsc login                # opens browser; saves JSON token to user config dir
+seo-bhishma gsc login --no-browser   # SSH / headless: prints URL + paste-back code
+seo-bhishma gsc status               # show authenticated account + token expiry
+seo-bhishma gsc sites                # list Search Console properties the account can access
+seo-bhishma gsc logout               # delete the saved token
+
 # Force a specific interface
 seo-bhishma chat               # AI agent REPL
 seo-bhishma menu               # legacy numbered menu
@@ -113,7 +120,10 @@ src/seo_bhishma/
 │   ├── tools.py     # 23 LangChain @tool wrappers around core/ functions, with auth tiers.
 │   ├── prompts.py   # SEO-specific system prompt for the agent.
 │   ├── graph.py     # `build_agent()`, `ToolAuthSession`, classify_tool_calls/needs_user_confirmation.
-│   └── validators.py  # Live OpenAI/Anthropic key validators used by the setup wizard.
+│   ├── validators.py  # Live OpenAI/Anthropic key validators used by the setup wizard.
+│   └── google_auth.py # Google OAuth flow + JSON token storage for `seo-bhishma gsc login`.
+├── data/            # Bundled non-code resources.
+│   └── oauth_client.json  # Public OAuth client config (client_id only; PKCE supplies the rest).
 ├── mcp/             # FastMCP server for external MCP clients.
 │   ├── server.py    # `seo-bhishma-mcp` entry point.
 │   ├── tools/       # One file per tool group (backlinks.py, indexing.py, …).
@@ -167,7 +177,7 @@ A legacy `preferences.yaml` (from before the wizard existed) is auto-migrated on
 - **Browser automation**: Playwright (index_spy, domain_insight) — requires `playwright install chromium`
 - **ML/NLP**: scikit-learn (clustering), spaCy (slug analysis in redirection_genius), sentence-transformers (embeddings in hannibal)
 - **AI calls outside the agent**: OpenAI API (keyword_sorcerer embeddings)
-- **Google**: google-auth + google-api-python-client (GSC OAuth in gsc_probe) — requires OAuth client credentials JSON
+- **Google**: google-auth + google-auth-oauthlib + google-api-python-client. Login via `seo-bhishma gsc login`; tokens stored as JSON at `<user_config_dir>/gsc_token.json` and auto-refreshed. Bundled OAuth client (`data/oauth_client.json`) is the default; users can override with their own client JSON by setting `SEO_BHISHMA_GSC_CREDENTIALS_PATH`. Maintainer note: until a real `client_id` is added to `data/oauth_client.json`, `gsc login` errors out with a clear message — register a Desktop-app OAuth client at https://console.cloud.google.com/apis/credentials and swap in the value
 
 ### Version Management
 

@@ -20,6 +20,7 @@ from seo_bhishma.cli.commands import (
     chat,
     config,
     domain_insight,
+    gsc,
     gsc_probe,
     hannibal,
     index_spy,
@@ -153,6 +154,8 @@ for _key, _label, _command in _MENU_ITEMS:
 cli.add_command(chat)
 # `config` is the wizard / inspector / editor for the saved user configuration.
 cli.add_command(config)
+# `gsc` handles Search Console OAuth authorization and inspection.
+cli.add_command(gsc)
 
 
 if __name__ == "__main__":

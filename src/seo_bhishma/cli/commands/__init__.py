@@ -3,6 +3,7 @@
 from seo_bhishma.cli.commands.chat import chat
 from seo_bhishma.cli.commands.config_cmd import config
 from seo_bhishma.cli.commands.domain_insight import domain_insight
+from seo_bhishma.cli.commands.gsc_cmd import gsc
 from seo_bhishma.cli.commands.gsc_probe import gsc_probe
 from seo_bhishma.cli.commands.hannibal import hannibal
 from seo_bhishma.cli.commands.index_spy import index_spy
@@ -16,6 +17,7 @@ __all__ = [
     "chat",
     "config",
     "domain_insight",
+    "gsc",
     "gsc_probe",
     "hannibal",
     "index_spy",

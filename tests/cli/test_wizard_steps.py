@@ -7,7 +7,6 @@ Live API calls are mocked at the validator boundary.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -189,35 +188,66 @@ def test_section_llm_empty_key_skips_provider(monkeypatch: pytest.MonkeyPatch) -
 # ---------------------------------------------------------------------------
 
 
-def test_section_gsc_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
-    _patch_prompts(monkeypatch, prompt=[], confirm=[False])
-    result = wizard_module._section_gsc(UserConfig(), step=3)
+def test_section_gsc_skipped_no_existing_creds(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_prompts(monkeypatch, prompt=[], confirm=[False])  # "Connect now?" -> no
+    with patch(
+        "seo_bhishma.agents.google_auth.load_saved_credentials", return_value=None
+    ):
+        result = wizard_module._section_gsc(UserConfig(), step=3)
     assert result.gsc_credentials_path == ""
 
 
-def test_section_gsc_accepts_valid_creds(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    creds = tmp_path / "creds.json"
-    creds.write_text(json.dumps({"installed": {"client_id": "abc"}}), encoding="utf-8")
-    _patch_prompts(monkeypatch, prompt=[str(creds)], confirm=[True])
-    result = wizard_module._section_gsc(UserConfig(), step=3)
-    assert result.gsc_credentials_path == str(creds)
+def test_section_gsc_runs_oauth_login_when_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_prompts(monkeypatch, prompt=[], confirm=[True])  # "Connect now?" -> yes
+
+    class _FakeCreds:
+        id_token = {"email": "user@example.com"}
+
+    with patch(
+        "seo_bhishma.agents.google_auth.load_saved_credentials", return_value=None
+    ), patch(
+        "seo_bhishma.agents.google_auth.do_oauth_login", return_value=_FakeCreds()
+    ) as mock_login:
+        result = wizard_module._section_gsc(UserConfig(), step=3)
+    mock_login.assert_called_once()
+    # gsc_credentials_path stays empty — we use the bundled / saved token, not a path.
+    assert result.gsc_credentials_path == ""
 
 
-def test_section_gsc_retries_on_bad_path(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+def test_section_gsc_skips_gracefully_when_oauth_unconfigured(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    good = tmp_path / "creds.json"
-    good.write_text(json.dumps({"installed": {"client_id": "abc"}}), encoding="utf-8")
-    # answers: bad path, then a good one. confirms: configure=yes, retry=yes
-    _patch_prompts(
-        monkeypatch,
-        prompt=["/nonexistent/file.json", str(good)],
-        confirm=[True, True],
-    )
-    result = wizard_module._section_gsc(UserConfig(), step=3)
-    assert result.gsc_credentials_path == str(good)
+    """If the bundled OAuth client still has the placeholder id, skip without crashing."""
+    from seo_bhishma.agents.google_auth import NoBundledClient
+
+    _patch_prompts(monkeypatch, prompt=[], confirm=[True])
+    with patch(
+        "seo_bhishma.agents.google_auth.load_saved_credentials", return_value=None
+    ), patch(
+        "seo_bhishma.agents.google_auth.do_oauth_login",
+        side_effect=NoBundledClient("placeholder client_id"),
+    ):
+        result = wizard_module._section_gsc(UserConfig(), step=3)
+    assert result.gsc_credentials_path == ""
+
+
+def test_section_gsc_offers_skip_when_already_connected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If a saved token already exists, the wizard mentions it and only re-auths on demand."""
+
+    class _FakeCreds:
+        id_token = {"email": "old@example.com"}
+
+    _patch_prompts(monkeypatch, prompt=[], confirm=[False])  # "Re-authorize?" -> no
+    with patch(
+        "seo_bhishma.agents.google_auth.load_saved_credentials", return_value=_FakeCreds()
+    ), patch(
+        "seo_bhishma.agents.google_auth.do_oauth_login"
+    ) as mock_login:
+        result = wizard_module._section_gsc(UserConfig(), step=3)
+    mock_login.assert_not_called()
+    assert result.gsc_credentials_path == ""
 
 
 # ---------------------------------------------------------------------------

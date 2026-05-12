@@ -30,7 +30,7 @@ Detected: Next.js, Vercel, Tailwind CSS, Google Analytics 4.
 - **IndexSpy** — bulk indexing checker with proxy rotation and CAPTCHA handling.
 - **KeywordSorcerer** — OpenAI-embedding keyword clusterer (KMeans / Agglomerative / DBSCAN / Spectral).
 - **Sitemap Generator** — single or nested, compressed sitemap output from a URL list.
-- **GSC Probe** — Search Console analytics, sitemaps, and bulk URL inspection.
+- **GSC Probe** — Search Console analytics, sitemaps, and bulk URL inspection. One-click OAuth via `seo-bhishma gsc login` — no Google Cloud project setup required.
 - **Redirection Genius** — NLP-based redirect URL mapping (TF-IDF over slugs + optional page-content comparison).
 - **Hannibal** — URL cannibalization detection from a GSC export.
 - **Domain Insights** — DNS / WHOIS / SSL / robots.txt / tech stack / security headers / reverse-IP / subdomain enumeration.
@@ -138,6 +138,18 @@ seo-bhishma domain-insight
 seo-bhishma hannibal
 seo-bhishma sitemap-generator
 ```
+
+## Connecting Google Search Console
+
+```bash
+seo-bhishma gsc login          # opens browser → Google consent → done
+seo-bhishma gsc login --no-browser   # SSH / headless: pastes a URL + code
+seo-bhishma gsc status         # show authorized account + token expiry
+seo-bhishma gsc sites          # list Search Console properties
+seo-bhishma gsc logout         # remove the saved token
+```
+
+Tokens are stored as JSON at `~/.config/seo-bhishma/gsc_token.json` (mode `0600`) and auto-refresh on expiry. The CLI ships its own OAuth client so you don't need a Google Cloud project — just authorize "SEO Bhishma" once and every GSC-touching command (and the AI agent's GSC tools) picks up the saved token automatically. To use your own OAuth client (e.g. for a Workspace org with its own quota): `seo-bhishma config set gsc_credentials_path /path/to/client.json`.
 
 ## MCP server
 

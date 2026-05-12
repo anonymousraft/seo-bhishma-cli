@@ -1,12 +1,10 @@
 """Core Google Search Console data extraction logic. No CLI dependencies."""
 
 import logging
-import pickle
 import time
 from datetime import date, datetime, timedelta
-from pathlib import Path
 
-from seo_bhishma.core._exceptions import AuthError, ConfigError, NetworkError
+from seo_bhishma.core._exceptions import AuthError, NetworkError
 from seo_bhishma.models.common import ProgressCallback
 from seo_bhishma.models.gsc_probe import (
     SearchAnalyticsFilter,
@@ -18,6 +16,7 @@ from seo_bhishma.models.gsc_probe import (
 
 logger = logging.getLogger(__name__)
 
+# Re-exported for convenience; the canonical list lives in agents.google_auth.
 SCOPES = [
     "https://www.googleapis.com/auth/webmasters.readonly",
     "https://www.googleapis.com/auth/webmasters",
@@ -25,53 +24,45 @@ SCOPES = [
 
 
 def authenticate_gsc(
-    credentials_path: str,
-    token_path: str = "token.pickle",
+    credentials_path: str | None = None,
+    token_path: str | None = None,  # noqa: ARG001  - kept for backward compat
 ):
     """Authenticate with Google Search Console and return a service object.
 
+    This function no longer runs the interactive OAuth flow inline. The user
+    completes login once via ``seo-bhishma gsc login``; we then read the
+    saved JSON token (auto-refreshing if expired) on every call. Use the
+    Click command if you need to (re-)authorize a machine.
+
     Args:
-        credentials_path: Path to the OAuth credentials JSON file.
-        token_path: Path to store/load the authentication token.
+        credentials_path: Backward-compat shim — ignored. The CLI now reads
+            an override from ``Settings.gsc_credentials_path`` (set via the
+            wizard or env var) and the bundled OAuth client from the package.
+        token_path: Backward-compat shim — ignored. Tokens are stored under
+            the user config directory by :mod:`seo_bhishma.agents.google_auth`.
 
     Returns:
-        Google Search Console API service object.
+        An authenticated Search Console API service object.
 
     Raises:
-        ConfigError: If credentials file is missing.
-        AuthError: If OAuth flow fails.
+        AuthError: If no token is available (user hasn't run ``gsc login``)
+            or refresh fails irrecoverably.
     """
-    from google.auth.transport.requests import Request
-    from google_auth_oauthlib.flow import InstalledAppFlow
     from googleapiclient.discovery import build
 
-    creds = None
-    token = Path(token_path)
+    from seo_bhishma.agents.google_auth import load_saved_credentials
 
-    if token.exists():
-        with open(token, "rb") as f:
-            creds = pickle.load(f)
-
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            try:
-                creds.refresh(Request())
-            except Exception as e:
-                raise AuthError(f"Failed to refresh GSC token: {e}") from e
-        else:
-            if not Path(credentials_path).exists():
-                raise ConfigError(
-                    f"GSC credentials file not found: {credentials_path}"
-                )
-            try:
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    credentials_path, SCOPES
-                )
-                creds = flow.run_local_server(port=0)
-            except Exception as e:
-                raise AuthError(f"GSC OAuth flow failed: {e}") from e
-        with open(token, "wb") as f:
-            pickle.dump(creds, f)
+    creds = load_saved_credentials()
+    if creds is None:
+        raise AuthError(
+            "No saved Google Search Console authentication. "
+            "Run `seo-bhishma gsc login` to authorize once."
+        )
+    if not creds.valid:
+        raise AuthError(
+            "Saved GSC token is invalid or expired beyond refresh. "
+            "Run `seo-bhishma gsc login` again."
+        )
 
     return build("searchconsole", "v1", credentials=creds)
 
