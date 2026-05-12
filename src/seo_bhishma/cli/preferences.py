@@ -1,65 +1,56 @@
-"""User preferences for the SEO Bhishma CLI.
+"""Backward-compatibility shim over :mod:`seo_bhishma.cli.user_config`.
 
-Stores the user's choice between the AI chat default and the legacy numbered
-menu. Preferences live in:
-
-* ``$SEO_BHISHMA_HOME/preferences.yaml`` when ``SEO_BHISHMA_HOME`` is set, else
-* ``~/.config/seo-bhishma/preferences.yaml`` on POSIX, or
-* ``%APPDATA%\\seo-bhishma\\preferences.yaml`` on Windows.
-
-The format is intentionally tiny and forward-compatible (a plain YAML dict).
+The pre-wizard ``preferences.yaml`` file has been folded into the richer
+``config.yaml`` written by the first-run wizard. This module keeps the old
+``Preferences`` dataclass + ``load_preferences()`` / ``save_preferences()``
+public API working so existing tests don't break — internally everything
+delegates to :mod:`user_config`, which also handles the one-time migration
+from the legacy file.
 """
 
 from __future__ import annotations
 
-import os
-import sys
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-import yaml
+from seo_bhishma.cli.user_config import (
+    UserConfig,
+    legacy_preferences_path,
+    load_config,
+    save_config,
+    user_config_path,
+)
 
 Interface = Literal["chat", "menu"]
 
 
 @dataclass
 class Preferences:
-    """User-level CLI preferences."""
+    """Legacy preferences shape — kept as a thin view onto :class:`UserConfig`."""
 
     default_interface: Interface = "chat"
 
 
 def preferences_path() -> Path:
-    """Resolve the preferences file path."""
-    override = os.environ.get("SEO_BHISHMA_HOME")
-    if override:
-        return Path(override) / "preferences.yaml"
-    if sys.platform.startswith("win"):
-        base = Path(os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming"))
-        return base / "seo-bhishma" / "preferences.yaml"
-    base = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
-    return base / "seo-bhishma" / "preferences.yaml"
+    """Return the legacy preferences path (used by tests that sandbox via env var).
+
+    Prefer :func:`user_config_path` in new code.
+    """
+    return legacy_preferences_path()
 
 
 def load_preferences() -> Preferences | None:
-    """Return saved preferences, or ``None`` if the user hasn't been onboarded yet."""
-    path = preferences_path()
-    if not path.exists():
+    """Return saved preferences, migrating from legacy ``preferences.yaml`` if needed."""
+    config = load_config()
+    if config is None:
         return None
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except Exception:
-        return None
-    iface = data.get("default_interface", "chat")
-    if iface not in ("chat", "menu"):
-        iface = "chat"
-    return Preferences(default_interface=iface)
+    return Preferences(default_interface=config.default_interface)
 
 
 def save_preferences(prefs: Preferences) -> Path:
-    """Write preferences to disk, creating parent directories as needed."""
-    path = preferences_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(yaml.safe_dump(asdict(prefs)), encoding="utf-8")
-    return path
+    """Persist ``prefs.default_interface`` into the unified ``config.yaml``."""
+    existing = load_config() or UserConfig()
+    updated = existing.model_copy(update={"default_interface": prefs.default_interface})
+    save_config(updated)
+    return user_config_path()

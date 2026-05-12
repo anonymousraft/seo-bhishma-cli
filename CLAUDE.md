@@ -11,7 +11,7 @@ SEO Bhishma is a Python toolkit (v3.0.0) for SEO professionals. It ships **four*
 3. **Direct subcommands** — `seo-bhishma link-sniper`, `seo-bhishma gsc-probe`, etc. for scripts/CI.
 4. **MCP server** — `seo-bhishma-mcp` exposes 34 tools over the Model Context Protocol for external MCP clients (Claude Desktop, IDEs).
 
-On first launch, the CLI runs a one-time wizard asking which of chat or menu should be the default for bare `seo-bhishma`. Switch later with `seo-bhishma set-default chat|menu`.
+On first launch, the CLI runs a **multi-step setup wizard** (`seo_bhishma.cli.wizard`) covering: default interface (chat/menu), LLM provider + API keys with live validation, Google Search Console OAuth, CAPTCHA service, spaCy model, and log level. Everything is saved to a single system-wide YAML; subsequent runs read it transparently via pydantic-settings, with env vars retaining the highest precedence. Re-run with `seo-bhishma config wizard` or change individual values with `seo-bhishma config set <key> <value>`.
 
 ## Build & Run Commands
 
@@ -19,8 +19,16 @@ On first launch, the CLI runs a one-time wizard asking which of chat or menu sho
 # Install in development mode (pulls langgraph + langchain + fastmcp; pytest/ruff in [dev])
 pip install -e ".[dev]"
 
-# First run — wizard chooses default. Subsequent runs honor the saved preference.
+# First run — full setup wizard. Subsequent runs honor the saved preference.
 seo-bhishma
+
+# Manage the saved configuration any time
+seo-bhishma config wizard            # re-run wizard, pre-filled with current values
+seo-bhishma config show              # print all settings (secrets masked)
+seo-bhishma config get <key>         # raw value (for scripts)
+seo-bhishma config set <key> <value> # update one field; validates API keys live
+seo-bhishma config path              # print the config file path
+seo-bhishma config reset             # delete the file
 
 # Force a specific interface
 seo-bhishma chat               # AI agent REPL
@@ -94,15 +102,18 @@ src/seo_bhishma/
 ├── core/            # Pure business logic — no Click, no Rich. Returns Pydantic models.
 ├── models/          # Pydantic v2 IO models, one file per tool.
 ├── cli/             # Click-based CLI surfaces.
-│   ├── app.py       # `seo-bhishma` entry point — wizard + dispatch + menu/set-default commands.
-│   ├── preferences.py  # Persistent user preference (chat vs menu default).
+│   ├── app.py       # `seo-bhishma` entry point — first-run wizard + dispatch + menu/set-default.
+│   ├── user_config.py  # System-wide config (Pydantic model + load/save + legacy migration).
+│   ├── wizard.py    # Five-section interactive first-run wizard with live API key validation.
+│   ├── preferences.py  # Backward-compat shim over user_config.py (legacy callers).
 │   ├── _ui.py       # Shared Rich helpers (console, tool_panel, make_progress).
-│   └── commands/    # One file per command. chat.py is the AI REPL; others are the legacy menu tools.
+│   └── commands/    # chat.py is the AI REPL; config_cmd.py is the config command group; others are the legacy menu tools.
 ├── agents/          # LangGraph ReAct agent that powers `seo-bhishma chat`.
 │   ├── llm.py       # Provider abstraction (OpenAI + Anthropic, auto-detected from settings).
 │   ├── tools.py     # 23 LangChain @tool wrappers around core/ functions, with auth tiers.
 │   ├── prompts.py   # SEO-specific system prompt for the agent.
-│   └── graph.py     # `build_agent()`, `ToolAuthSession`, classify_tool_calls/needs_user_confirmation.
+│   ├── graph.py     # `build_agent()`, `ToolAuthSession`, classify_tool_calls/needs_user_confirmation.
+│   └── validators.py  # Live OpenAI/Anthropic key validators used by the setup wizard.
 ├── mcp/             # FastMCP server for external MCP clients.
 │   ├── server.py    # `seo-bhishma-mcp` entry point.
 │   ├── tools/       # One file per tool group (backlinks.py, indexing.py, …).
@@ -113,15 +124,17 @@ src/seo_bhishma/
 └── skills/          # Empty stub (reserved for future use).
 ```
 
-### Preferences file
+### User configuration file
 
-The first-run wizard writes a preferences YAML to:
+The first-run wizard (and `seo-bhishma config set`) writes a single YAML to:
 
-- `$SEO_BHISHMA_HOME/preferences.yaml` if `SEO_BHISHMA_HOME` is set (used in tests).
-- `%APPDATA%\seo-bhishma\preferences.yaml` on Windows.
-- `~/.config/seo-bhishma/preferences.yaml` on POSIX.
+- `$SEO_BHISHMA_HOME/config.yaml` if `SEO_BHISHMA_HOME` is set (used in tests).
+- `%APPDATA%\seo-bhishma\config.yaml` on Windows.
+- `~/.config/seo-bhishma/config.yaml` on POSIX (chmod 0o600).
 
-Only one key today: `default_interface: chat | menu`. The format is forward-compatible.
+The schema is defined by `seo_bhishma.cli.user_config.UserConfig` and is read into `Settings` automatically as a low-priority source (`settings_customise_sources` returns `init > env > .env > yaml > defaults`). Field names in the YAML are flat and match `Settings` 1:1, so `pydantic-settings`'s `YamlConfigSettingsSource` picks them up without aliases.
+
+A legacy `preferences.yaml` (from before the wizard existed) is auto-migrated on first load.
 
 ### Adding a New Tool
 

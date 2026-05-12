@@ -11,6 +11,7 @@ import yaml
 from rich.prompt import Prompt
 
 from seo_bhishma.cli._ui import console, make_progress, tool_panel
+from seo_bhishma.config.settings import Settings
 from seo_bhishma.core.keyword_sorcerer import (
     cluster_keywords,
     estimate_token_usage,
@@ -18,6 +19,9 @@ from seo_bhishma.core.keyword_sorcerer import (
 )
 from seo_bhishma.models.keyword_sorcerer import ClusterMethod
 
+# Legacy per-working-directory file kept only as a fallback for users who set
+# their key here before the wizard existed. New keys belong in the system-wide
+# config file via `seo-bhishma config set openai_api_key ...`.
 _CONFIG_FILE = "config.yaml"
 
 _METHOD_BY_CHOICE = {
@@ -75,9 +79,15 @@ def keyword_sorcerer() -> None:
             default=f"clusters_{timestamp}.csv",
         )
 
-        api_key = config.get("api_key")
+        # Prefer the system-wide config (set via wizard or env) over the legacy local file.
+        api_key = Settings().openai_api_key or config.get("api_key", "")
         if not api_key:
+            console.print(
+                "[dim]Tip: run [bold]seo-bhishma config set openai_api_key ...[/bold] "
+                "to store this key system-wide for all tools.[/dim]"
+            )
             api_key = Prompt.ask("[cyan]Enter your OpenAI API key[/cyan]", password=True)
+            # Persist to the legacy file for backward compatibility (wizard users won't hit this).
             config["api_key"] = api_key
             _save_config(config)
 

@@ -1,7 +1,8 @@
 """Entry point for the ``seo-bhishma`` CLI.
 
-Bare ``seo-bhishma`` dispatches to either the AI chat or the legacy numbered
-menu based on the user's saved preference (or runs a first-run wizard).
+Bare ``seo-bhishma`` runs the first-run wizard when no config file exists,
+then dispatches to either the AI chat or the legacy numbered menu based on
+the user's saved ``default_interface``.
 """
 
 from __future__ import annotations
@@ -11,13 +12,13 @@ import sys
 import click
 from art import text2art
 from rich import box
-from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
 
 from seo_bhishma.cli._ui import console, tool_panel
 from seo_bhishma.cli.commands import (
     chat,
+    config,
     domain_insight,
     gsc_probe,
     hannibal,
@@ -28,12 +29,12 @@ from seo_bhishma.cli.commands import (
     site_mapper,
     sitemap_generator,
 )
-from seo_bhishma.cli.preferences import (
-    Interface,
-    Preferences,
-    load_preferences,
-    save_preferences,
+from seo_bhishma.cli.user_config import (
+    UserConfig,
+    load_config,
+    save_config,
 )
+from seo_bhishma.cli.wizard import run_wizard
 from seo_bhishma.config.constants import (
     CLI_AUTHOR,
     CLI_MESSAGE,
@@ -69,11 +70,11 @@ def cli(ctx: click.Context, word: bool) -> None:
 
     ctx.invoke(intro)
 
-    prefs = load_preferences()
-    if prefs is None:
-        prefs = _run_first_run_wizard()
+    user_config = load_config()
+    if user_config is None:
+        user_config = run_wizard()
 
-    if prefs.default_interface == "chat":
+    if user_config.default_interface == "chat":
         ctx.invoke(chat)
     else:
         ctx.invoke(menu)
@@ -120,32 +121,17 @@ def menu(ctx: click.Context) -> None:
 
 @cli.command("set-default")
 @click.argument("interface", type=click.Choice(["chat", "menu"]))
-def set_default(interface: Interface) -> None:
-    """Set the default interface launched by bare ``seo-bhishma``."""
-    path = save_preferences(Preferences(default_interface=interface))
+def set_default(interface: str) -> None:
+    """Set the default interface launched by bare ``seo-bhishma``.
+
+    Thin wrapper over ``seo-bhishma config set default_interface <interface>``.
+    """
+    existing = load_config() or UserConfig()
+    updated = existing.model_copy(update={"default_interface": interface})
+    path = save_config(updated)
     console.print(
         f"[green][+] Default interface set to [bold]{interface}[/bold]. Saved to {path}.[/green]"
     )
-
-
-def _run_first_run_wizard() -> Preferences:
-    """Ask the user how they want to use the CLI, save the answer, and return it."""
-    console.print(
-        Panel(
-            "Welcome to SEO Bhishma! How would you like to use the CLI?\n\n"
-            "  [bold]1.[/bold] AI chat — describe what you want, the agent picks the tool. ([cyan]recommended[/cyan])\n"
-            "  [bold]2.[/bold] Numbered menu — pick one of nine tools from a list (legacy v2 style).\n\n"
-            "You can change this later with [bold]seo-bhishma set-default chat|menu[/bold].",
-            title="First-time setup",
-            border_style="green",
-        )
-    )
-    choice = Prompt.ask("Pick your default", choices=["1", "2"], default="1")
-    interface: Interface = "chat" if choice == "1" else "menu"
-    prefs = Preferences(default_interface=interface)
-    path = save_preferences(prefs)
-    console.print(f"[dim]Preference saved to {path}.[/dim]\n")
-    return prefs
 
 
 # Register all subcommands as top-level commands too (so `seo-bhishma link-sniper` works)
@@ -154,6 +140,8 @@ for _key, _label, _command in _MENU_ITEMS:
 
 # `chat` is the AI-native entry point — registered top-level but not in the numbered menu.
 cli.add_command(chat)
+# `config` is the wizard / inspector / editor for the saved user configuration.
+cli.add_command(config)
 
 
 if __name__ == "__main__":

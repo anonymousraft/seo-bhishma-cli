@@ -22,6 +22,7 @@ Detected: Next.js, Vercel, Tailwind CSS, Google Analytics 4.
 
 ## Features
 
+- **First-run setup wizard** — guided walkthrough on first launch: default interface, LLM provider + API keys (validated live), GSC OAuth path, CAPTCHA service, advanced settings. Re-runnable with `seo-bhishma config wizard`. Everything persists to `~/.config/seo-bhishma/config.yaml`.
 - **AI chat** (default) — conversational REPL backed by a LangGraph ReAct agent over 23 SEO tools. Auto-picks OpenAI or Anthropic from env vars; supports `/model`, `/tools`, `/save`, `/menu`, `/clear`.
 - **Tiered tool authorization** — read-only tools auto-run; cost/time-sensitive tools (Search Console, OpenAI embeddings, batch ops) confirm once per session; file-writing tools confirm every time.
 - **LinkSniper** — bulk backlink verification with anchor-text and `rel`/dofollow checks.
@@ -73,35 +74,42 @@ pip install seo-bhishma
 
 ## Quick start
 
-### 1. Set an API key
-
-The AI chat needs one of these env vars:
-
-```bash
-export SEO_BHISHMA_OPENAI_API_KEY=sk-...      # macOS / Linux
-# or
-setx SEO_BHISHMA_OPENAI_API_KEY sk-...        # Windows
-
-# Or use Anthropic instead:
-export SEO_BHISHMA_ANTHROPIC_API_KEY=sk-ant-...
-```
-
-See `.env.example` for the full list (Google Search Console OAuth path, CAPTCHA service, spaCy model, etc.). The CLI also reads a local `.env` file in the current directory.
-
-### 2. Launch
+### 1. Launch
 
 ```bash
 seo-bhishma
 ```
 
-On first launch a one-time wizard asks whether you want AI chat or the numbered menu as the default. Switch later with `seo-bhishma set-default chat` or `seo-bhishma set-default menu`. You can always force a specific interface:
+On first launch a **multi-step setup wizard** runs and walks you through everything: default interface (chat or menu), LLM provider + API keys (with **live validation** so you know immediately whether a key works), Google Search Console OAuth credentials, CAPTCHA service, and advanced settings like spaCy model and log level. Each section can be skipped.
+
+Everything you set is saved to a single system-wide YAML:
+
+- `~/.config/seo-bhishma/config.yaml` on macOS / Linux (mode `0600` — owner only)
+- `%APPDATA%\seo-bhishma\config.yaml` on Windows
+
+Next runs read this automatically. You can still override anything with `SEO_BHISHMA_*` env vars or a project-local `.env` file — env vars take precedence over the saved config, which makes CI overrides clean.
+
+### 2. Reconfigure any time
+
+```bash
+seo-bhishma config wizard            # re-run the full wizard with current values pre-filled
+seo-bhishma config show              # see every setting (secrets masked)
+seo-bhishma config get llm_model     # print one value (raw, scriptable)
+seo-bhishma config set openai_api_key sk-...   # update one field (re-validates API keys)
+seo-bhishma config path              # absolute path of the YAML
+seo-bhishma config reset             # delete the file; next launch re-runs the wizard
+```
+
+### 3. Force a specific interface
+
+You can always force a specific interface:
 
 ```bash
 seo-bhishma chat     # AI agent REPL (default for new users)
 seo-bhishma menu     # legacy numbered menu
 ```
 
-### 3. Talk to the agent
+### 4. Talk to the agent
 
 ```text
 You> pull last 7 days of GSC clicks for sc-domain:example.com, top 10 pages
