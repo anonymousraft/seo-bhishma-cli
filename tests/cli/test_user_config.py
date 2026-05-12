@@ -15,6 +15,7 @@ from seo_bhishma.cli.user_config import (
     SECRET_FIELDS,
     UserConfig,
     _mask_secret,
+    consume_legacy_default_interface,
     delete_config,
     legacy_preferences_path,
     load_config,
@@ -96,18 +97,53 @@ def test_delete_config_removes_file() -> None:
     assert delete_config() is False
 
 
-def test_legacy_preferences_migration(tmp_path: Path) -> None:
-    """A pre-wizard preferences.yaml should be migrated and removed on load."""
+def test_load_config_does_not_auto_migrate_legacy_preferences(tmp_path: Path) -> None:
+    """A pre-wizard preferences.yaml alone must NOT bypass the wizard.
+
+    Earlier behavior silently created a half-empty config.yaml on load, which
+    meant ``load_config()`` returned a non-None value and the wizard never
+    ran on upgrade. The wizard now drives migration explicitly via
+    :func:`consume_legacy_default_interface`.
+    """
     legacy = legacy_preferences_path()
     legacy.parent.mkdir(parents=True, exist_ok=True)
     legacy.write_text(yaml.safe_dump({"default_interface": "menu"}), encoding="utf-8")
     assert legacy.exists()
 
-    migrated = load_config()
-    assert migrated is not None
-    assert migrated.default_interface == "menu"
-    assert not legacy.exists(), "legacy file should be cleaned up after migration"
-    assert user_config_path().exists()
+    assert load_config() is None, "load_config must report 'first run' so the wizard fires"
+    assert not user_config_path().exists()
+    assert legacy.exists(), "load_config must not touch the legacy file"
+
+
+def test_consume_legacy_default_interface_reads_and_deletes() -> None:
+    legacy = legacy_preferences_path()
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text(yaml.safe_dump({"default_interface": "menu"}), encoding="utf-8")
+
+    assert consume_legacy_default_interface() == "menu"
+    assert not legacy.exists()
+
+
+def test_consume_legacy_default_interface_returns_none_when_missing() -> None:
+    assert consume_legacy_default_interface() is None
+
+
+def test_consume_legacy_default_interface_handles_corrupt_yaml() -> None:
+    legacy = legacy_preferences_path()
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text("not: valid: yaml: :", encoding="utf-8")
+
+    assert consume_legacy_default_interface() is None
+    assert not legacy.exists(), "even corrupt legacy files should be removed"
+
+
+def test_consume_legacy_default_interface_rejects_unknown_value() -> None:
+    legacy = legacy_preferences_path()
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text(yaml.safe_dump({"default_interface": "weirdmode"}), encoding="utf-8")
+
+    assert consume_legacy_default_interface() is None
+    assert not legacy.exists()
 
 
 def test_corrupt_yaml_returns_none() -> None:

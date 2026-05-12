@@ -32,6 +32,7 @@ from seo_bhishma.cli.user_config import (
     SECRET_FIELDS,
     UserConfig,
     _mask_secret,
+    consume_legacy_default_interface,
     save_config,
     user_config_path,
 )
@@ -52,6 +53,13 @@ def run_wizard(existing: UserConfig | None = None) -> UserConfig:
     each current value.
     """
     _print_intro()
+    if existing is None:
+        # Upgrade case: a pre-wizard preferences.yaml is on disk. Use its
+        # default_interface as the starting point so the user's old choice
+        # survives the upgrade, then delete the legacy file.
+        legacy_interface = consume_legacy_default_interface()
+        if legacy_interface is not None:
+            existing = UserConfig(default_interface=legacy_interface)
     state = existing.model_copy(deep=True) if existing else UserConfig()
 
     state = _section_interface(state, step=1)

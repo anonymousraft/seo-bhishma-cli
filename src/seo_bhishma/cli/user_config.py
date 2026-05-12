@@ -146,29 +146,21 @@ def legacy_preferences_path() -> Path:
 
 
 def load_config() -> UserConfig | None:
-    """Load the saved config.
+    """Load the saved config, or return ``None`` if the wizard hasn't run.
 
-    Returns ``None`` when no config exists *and* no legacy preferences file is
-    available — that signals "first run, launch the wizard".
-
-    If only the legacy ``preferences.yaml`` exists, it is migrated in place to
-    the new ``config.yaml`` and the legacy file is deleted.
+    The legacy pre-wizard ``preferences.yaml`` is intentionally *not*
+    migrated here — auto-creating a half-empty ``config.yaml`` would bypass
+    the wizard on upgrade. Callers running the wizard should instead use
+    :func:`consume_legacy_default_interface` to pre-populate section 1.
     """
     path = user_config_path()
-    if path.exists():
-        try:
-            raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        except Exception:
-            return None
-        return UserConfig.model_validate(_coerce_legacy_fields(raw))
-
-    legacy = legacy_preferences_path()
-    if legacy.exists():
-        migrated = _migrate_legacy_preferences(legacy)
-        if migrated is not None:
-            return migrated
-
-    return None
+    if not path.exists():
+        return None
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return None
+    return UserConfig.model_validate(_coerce_legacy_fields(raw))
 
 
 def save_config(config: UserConfig) -> Path:
@@ -218,22 +210,30 @@ def delete_config() -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _migrate_legacy_preferences(legacy_path: Path) -> UserConfig | None:
-    """Read the pre-wizard ``preferences.yaml``, write a new ``config.yaml``, delete the old one."""
-    try:
-        raw = yaml.safe_load(legacy_path.read_text(encoding="utf-8")) or {}
-    except Exception:
+def consume_legacy_default_interface() -> str | None:
+    """If a pre-wizard ``preferences.yaml`` exists, read its ``default_interface``,
+    delete the file, and return the value.
+
+    Used by the wizard on first run to keep an upgrading user's old choice as
+    the default for section 1. The legacy file is removed unconditionally so
+    we never re-prompt about it on the next launch.
+    """
+    legacy = legacy_preferences_path()
+    if not legacy.exists():
         return None
-    interface = raw.get("default_interface", "chat")
-    if interface not in ("chat", "menu"):
-        interface = "chat"
-    config = UserConfig(default_interface=interface)
-    save_config(config)
+    interface: str | None = None
     try:
-        legacy_path.unlink()
+        raw = yaml.safe_load(legacy.read_text(encoding="utf-8")) or {}
+        candidate = raw.get("default_interface")
+        if candidate in ("chat", "menu"):
+            interface = candidate
+    except Exception:
+        pass
+    try:
+        legacy.unlink()
     except OSError:
         pass
-    return config
+    return interface
 
 
 def _coerce_legacy_fields(raw: dict[str, Any]) -> dict[str, Any]:

@@ -309,6 +309,42 @@ def test_run_wizard_saves_complete_config(monkeypatch: pytest.MonkeyPatch) -> No
     assert reloaded.model_dump() == saved.model_dump()
 
 
+def test_run_wizard_consumes_legacy_preferences_on_upgrade(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """On upgrade from the pre-wizard CLI, the legacy preferences.yaml's
+    ``default_interface`` becomes the default for section 1 and the legacy file is removed.
+    """
+    import yaml
+
+    from seo_bhishma.cli.user_config import legacy_preferences_path
+
+    legacy = legacy_preferences_path()
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text(yaml.safe_dump({"default_interface": "menu"}), encoding="utf-8")
+
+    captured_default: dict[str, str] = {}
+
+    def fake_prompt_ask(prompt: str, **kwargs):
+        # Section 1 asks for the interface; record the offered default and accept it.
+        if "Default interface" in prompt:
+            captured_default["interface_default"] = kwargs.get("default", "")
+            return kwargs.get("default", "chat")
+        return "skip"  # LLM section choice
+
+    monkeypatch.setattr("seo_bhishma.cli.wizard.Prompt.ask", fake_prompt_ask)
+    monkeypatch.setattr(
+        "seo_bhishma.cli.wizard.Confirm.ask",
+        _ScriptedPrompts([False, False, False, True]),  # GSC, CAPTCHA, advanced, save
+    )
+
+    saved = wizard_module.run_wizard()
+
+    assert captured_default["interface_default"] == "menu"
+    assert saved.default_interface == "menu"
+    assert not legacy.exists(), "legacy preferences.yaml must be removed by the wizard"
+
+
 def test_run_wizard_declines_save_does_not_persist(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_prompts(
         monkeypatch,

@@ -41,6 +41,7 @@ from seo_bhishma.config.constants import (
     CLI_NAME,
     CLI_VERSION,
 )
+from seo_bhishma.config.settings import Settings
 
 _MENU_ITEMS = [
     ("1", "GSC Probe", gsc_probe),
@@ -73,6 +74,16 @@ def cli(ctx: click.Context, word: bool) -> None:
     user_config = load_config()
     if user_config is None:
         user_config = run_wizard()
+
+    # Defensive: if the saved config wants chat but no LLM is resolvable
+    # (no env var, no key in YAML), finish setup before launching chat
+    # instead of erroring out at the chat entry point.
+    if user_config.default_interface == "chat" and not Settings().resolve_provider():
+        console.print(
+            "[yellow]Chat requires an LLM provider, but none is configured yet. "
+            "Running setup…[/yellow]\n"
+        )
+        user_config = run_wizard(existing=user_config)
 
     if user_config.default_interface == "chat":
         ctx.invoke(chat)
