@@ -40,7 +40,7 @@ def install_playwright_binaries():
             print("Chromium browser installed successfully for Playwright.")
         except Exception as e:
             console.print(f"An error occurred while installing Playwright binaries: {e}")
-            exit(1)
+            sys.exit(1)
 
 # Global variable to store the domain for the session
 current_domain = None
@@ -297,7 +297,7 @@ def extract_urls_from_sitemap(sitemap_url, sitemap_path):
                     temp_sitemap_path = download_sitemap(loc)
                     if temp_sitemap_path:
                         urls.extend(extract_urls_from_sitemap(loc, temp_sitemap_path))
-                        os.remove(temp_sitemap_path)
+                        Path(temp_sitemap_path).unlink()
             else:
                 for url in soup.find_all('loc'):
                     urls.append((sitemap_url, url.text))
@@ -550,7 +550,7 @@ def domain_insight(domain, choice):
                     if temp_sitemap_path:
                         urls_from_sitemap = extract_urls_from_sitemap(sitemap_url, temp_sitemap_path)
                         all_urls.extend(urls_from_sitemap)
-                        os.remove(temp_sitemap_path)
+                        Path(temp_sitemap_path).unlink()
                         console.print(f"[bold blue][*] {len(urls_from_sitemap)} URLs extracted from {sitemap_url}[/bold blue]")
                 progress.update(task_fetch_sitemaps, completed=True)
                 

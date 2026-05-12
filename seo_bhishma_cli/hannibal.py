@@ -8,7 +8,7 @@ console = Console()
 # Function to check if a package is installed
 def is_package_installed(package_name):
     try:
-        subprocess.check_call([sys.executable, "-m", "pip", "show", package_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run([sys.executable, "-m", "pip", "show", package_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         return True
     except subprocess.CalledProcessError:
         return False
@@ -16,7 +16,7 @@ def is_package_installed(package_name):
 # Function to install larger dependencies
 def install_large_dependencies():
     console.print("[green][+] Installing large dependencies...[/green]")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "sentence-transformers", "scikit-learn"])
+    subprocess.run([sys.executable, "-m", "pip", "install", "sentence-transformers", "scikit-learn"], check=True)
     console.print("[green][+] Large dependencies installed successfully.[/green]")
 
 # Function to calculate package size

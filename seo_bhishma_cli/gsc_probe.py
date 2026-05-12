@@ -22,7 +22,7 @@ def signal_handler(sig, frame):
     console.log("[bold yellow][/] Process interrupted! Progress has been saved.[/bold yellow]")
     if progress:
         save_progress(progress['data'], output_file)
-    exit(0)
+    sys.exit(0)
 
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
@@ -31,7 +31,7 @@ def authenticate_gsc(creds_path=None):
     creds = None
     token_path = 'token.pickle'
     
-    if os.path.exists(token_path):
+    if Path(token_path).exists():
         with open(token_path, 'rb') as token:
             creds = pickle.load(token)
     
@@ -56,7 +56,7 @@ def save_progress(data, output_file):
 
 def load_progress(output_file):
     temp_file = output_file + ".temp"
-    if os.path.exists(temp_file):
+    if Path(temp_file).exists():
         with open(temp_file, 'r', encoding='utf-8') as f:
             return json.load(f)
     return []
@@ -70,9 +70,9 @@ def fetch_site_list(service):
         return None
 
 def save_gsc_data(site_url, data, dimensions, data_type):
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     filename = f"gsc_data/{site_url.replace('https://', '').replace('/', '_')}_{timestamp}_{'_'.join(dimensions)}_{data_type}.csv"
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    Path(filename).parent.mkdir(parents=True, exist_ok=True)
     
     if data_type == 'search_analytics':
         if 'rows' in data and data['rows']:
@@ -258,11 +258,6 @@ def gsc_probe(ctx):
                         if apply_filter.lower() == 'yes':
                             filter_operator = click.prompt(click.style("Enter the filter operator (e.g., equals, contains, notContains, includingRegex, excludingRegex)", fg="magenta"), default="equals")
                             filter_expression = click.prompt(click.style("Enter the filter expression", fg="magenta"))
-                            if filter_operator in ["includingRegex", "excludingRegex"]:
-                                if filter_operator == "includingRegex":
-                                    filter_operator = "includingRegex"
-                                else:
-                                    filter_operator = "excludingRegex"
                             filters.append({
                                 'dimension': dimension,
                                 'operator': filter_operator,
@@ -305,8 +300,9 @@ def gsc_probe(ctx):
                 else:
                     df = pd.DataFrame(data)
                     df.to_csv(output_file, index=False, encoding='utf-8')
-                    if os.path.exists(output_file + ".temp"):
-                        os.remove(output_file + ".temp")
+                    temp_path = Path(output_file + ".temp")
+                    if temp_path.exists():
+                        temp_path.unlink()
                     console.log(f"[green][+] GSC data saved to {output_file}[/green]")
             
             elif data_type == 2:

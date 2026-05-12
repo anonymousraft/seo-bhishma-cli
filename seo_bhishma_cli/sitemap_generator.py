@@ -78,10 +78,11 @@ def sitemap_generator(input_file, output_dir, choice, nested, url_limit, compres
         if not output_dir:
             output_dir = Prompt.ask("[cyan]Enter the output directory[/cyan]", default='sitemaps/')
         
-        output_dir = os.path.abspath(output_dir)
+        output_dir = str(Path(output_dir).resolve())
 
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        output_path = Path(output_dir)
+        if not output_path.exists():
+            output_path.mkdir(parents=True)
             console.print(f"[green][+] Output directory '{output_dir}' created.[/green]")
 
         nested = choice == "2" if not nested else nested
@@ -112,7 +113,7 @@ def sitemap_generator(input_file, output_dir, choice, nested, url_limit, compres
                 console.print("[+] Generating single sitemap...", style="bold green")
                 sitemap_content = generate_sitemap(urls, priority if priority else None, frequency if frequency else None, lastmod)
                 file_name = f'sitemap_{timestamp}.xml'
-                file_path = os.path.join(output_dir, file_name)
+                file_path = str(Path(output_dir) / file_name)
                 if compressed:
                     file_path += '.gz'
                 write_sitemap(file_path, sitemap_content, compressed)
@@ -127,7 +128,7 @@ def sitemap_generator(input_file, output_dir, choice, nested, url_limit, compres
                         sitemap_urls = urls[i:i+url_limit]
                         sitemap_content = generate_sitemap(sitemap_urls, priority if priority else None, frequency if frequency else None, lastmod)
                         sitemap_file_name = f'sitemap_{timestamp}_{i // url_limit}.xml'
-                        sitemap_file_path = os.path.join(output_dir, sitemap_file_name)
+                        sitemap_file_path = str(Path(output_dir) / sitemap_file_name)
                         if compressed:
                             sitemap_file_path += '.gz'
                         write_sitemap(sitemap_file_path, sitemap_content, compressed)
@@ -141,13 +142,13 @@ def sitemap_generator(input_file, output_dir, choice, nested, url_limit, compres
                 for sitemap in sitemap_index:
                     sitemap_element = etree.Element('sitemap')
                     loc_element = etree.Element('loc')
-                    loc_element.text = os.path.join(output_dir, sitemap)
+                    loc_element.text = str(Path(output_dir) / sitemap)
                     sitemap_element.append(loc_element)
                     sitemapindex.append(sitemap_element)
                 
                 sitemap_index_content = etree.tostring(sitemapindex, pretty_print=True, xml_declaration=True, encoding='UTF-8')
                 sitemap_index_file = f'sitemap_index_{timestamp}.xml'
-                sitemap_index_path = os.path.join(output_dir, sitemap_index_file)
+                sitemap_index_path = str(Path(output_dir) / sitemap_index_file)
                 if compressed:
                     sitemap_index_path += '.gz'
                 write_sitemap(sitemap_index_path, sitemap_index_content, compressed)

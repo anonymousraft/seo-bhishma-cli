@@ -16,7 +16,7 @@ console = Console()
 
 # Function to load configuration
 def load_config():
-    if os.path.exists(CONFIG_FILE):
+    if Path(CONFIG_FILE).exists():
         with open(CONFIG_FILE, 'r') as file:
             config = yaml.safe_load(file)
     else:
@@ -35,7 +35,7 @@ def save_progress(progress):
 
 # Function to load progress
 def load_progress():
-    if os.path.exists(PROGRESS_FILE):
+    if Path(PROGRESS_FILE).exists():
         with open(PROGRESS_FILE, 'r') as file:
             progress = yaml.safe_load(file)
     else:
@@ -62,7 +62,7 @@ def estimate_token_usage(keywords):
 def determine_cluster_names(keywords, labels):
     clusters = {}
     for label in set(labels):
-        cluster_keywords = [keywords[i] for i in range(len(keywords)) if labels[i] == label]
+        cluster_keywords = [kw for kw, lbl in zip(keywords, labels) if lbl == label]
         cluster_name = max(set(cluster_keywords), key=cluster_keywords.count)
         clusters[label] = cluster_name
     return clusters

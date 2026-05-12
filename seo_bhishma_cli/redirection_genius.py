@@ -157,7 +157,7 @@ def process_url_mapping(i, source_url, dest_urls, tfidf_scores, use_web_content_
 
 def start_redirection():
     input_file = click.prompt(click.style("Enter the path to the input CSV file", fg="cyan", bold=True))
-    if not os.path.isfile(input_file):
+    if not Path(input_file).is_file():
         console.print("[bold red][-] Input file not found. Please check the file path and try again.[/bold red]")
         return
     try:

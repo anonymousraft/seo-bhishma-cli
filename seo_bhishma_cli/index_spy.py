@@ -7,7 +7,6 @@ import asyncio
 import subprocess
 from pathlib import Path
 from playwright.async_api import async_playwright
-from bs4 import BeautifulSoup
 from datetime import datetime
 
 console = Console()
@@ -31,7 +30,7 @@ def install_playwright_binaries():
             print("Chromium browser installed successfully for Playwright.")
         except Exception as e:
             console.print(f"An error occurred while installing Playwright binaries: {e}")
-            exit(1)
+            sys.exit(1)
 
 def load_proxies(proxy_file):
     try:
@@ -313,7 +312,7 @@ async def check_indexing_status_playwright(url, proxy=None, captcha_handling_cho
                     while "captcha" in await page.content().lower():
                         try:
                             await page.wait_for_timeout(5000)
-                        except:
+                        except Exception:
                             await browser.close()
                             return None
                     return await check_indexing_status_playwright(url, proxy, captcha_handling_choice, headless)
@@ -462,7 +461,7 @@ def index_spy(ctx):
                             break
                     else:
                         console.print(f"[red][-] All the proxies are not valid, Try with Others..[/red]")
-                        exit()
+                        sys.exit()
             else:
                 with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
                     task = progress.add_task("Checking indexing status...", total=None)

@@ -13,7 +13,7 @@ console = Console()
 def cli(ctx, word):
     if word:
         console.print(Panel(CLI_MESSAGE, title="Message to World", subtitle="Swami Vivekananda", subtitle_align="right", border_style="green"))
-        exit()
+        sys.exit()
         
     try:
         if ctx.invoked_subcommand is None:

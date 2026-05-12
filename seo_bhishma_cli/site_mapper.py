@@ -28,7 +28,7 @@ def signal_handler(sig, frame):
     console.log("[bold yellow][+] Process interrupted! Progress has been saved.[/bold yellow]")
     if progress:
         save_progress(progress['urls'], output_file)
-    exit(0)
+    sys.exit(0)
 
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
@@ -56,7 +56,7 @@ def save_progress(urls, output_file):
 
 def load_progress(output_file):
     temp_file = output_file + ".temp"
-    if os.path.exists(temp_file):
+    if Path(temp_file).exists():
         with open(temp_file, 'r') as f:
             return json.load(f)
     return []
@@ -143,9 +143,8 @@ def site_mapper(sitemap_url, output_file):
         default_filename = f"{domain_name}_sitemap_{timestamp}.csv"
         
         if output_file:
-            file_path, file_name = os.path.split(output_file)
-            file_base, file_extension = os.path.splitext(file_name)
-            output_file = os.path.join(file_path, f"{file_base}_{timestamp}{file_extension}")
+            p = Path(output_file)
+            output_file = str(p.parent / f"{p.stem}_{timestamp}{p.suffix}")
         else:
             output_file = click.prompt(click.style(f"Enter the path to the output CSV file (leave blank for default: {default_filename})", fg="cyan", bold=True), default=default_filename, show_default=True)
         
@@ -162,8 +161,9 @@ def site_mapper(sitemap_url, output_file):
             parse_sitemap(root, urls, sitemap_url, output_file=output_file)
             df = pd.DataFrame(urls)
             df.to_csv(output_file, index=False, encoding='utf-8')
-            if os.path.exists(output_file + ".temp"):
-                os.remove(output_file + ".temp")
+            temp_path = Path(output_file + ".temp")
+            if temp_path.exists():
+                temp_path.unlink()
             console.log(f"[green][+] Sitemap data saved to {output_file}[/green]")
             console.log("\n")
         else:
