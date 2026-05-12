@@ -5,12 +5,10 @@ import xml.etree.ElementTree as ET
 from seo_bhishma.core.site_mapper import (
     NAMESPACE,
     _find,
-    _findall,
     _strip_namespace,
-    parse_url_element,
     parse_sitemap,
+    parse_url_element,
 )
-
 
 NS_DECL = 'xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"'
 

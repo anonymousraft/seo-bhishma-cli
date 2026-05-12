@@ -61,21 +61,16 @@ dependencies = [
     "python-whois",
     "geopy",
     "python-wappalyzer",
-]
-
-[project.optional-dependencies]
-mcp = [
+    # MCP server (registered as `seo-bhishma-mcp` script — must be present in base install)
     "fastmcp>=2.0",
-]
-agents = [
+    # AI agents (default chat experience — required by `seo-bhishma chat`)
     "langgraph>=0.2",
     "langchain-core>=0.3",
     "langchain-openai>=0.2",
     "langchain-anthropic>=0.2",
 ]
-all = [
-    "seo-bhishma[mcp,agents]",
-]
+
+[project.optional-dependencies]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
@@ -106,3 +101,8 @@ select = ["E", "F", "I", "UP"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+filterwarnings = [
+    # langgraph 1.x deprecates create_react_agent in favor of langchain.agents.create_agent;
+    # migration deferred until we want to take a hard dep on the `langchain` umbrella package.
+    "ignore:create_react_agent has been moved.*:DeprecationWarning",
+]

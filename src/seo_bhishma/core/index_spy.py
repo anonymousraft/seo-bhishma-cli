@@ -162,7 +162,7 @@ def _run_async(coro):
     existing loop (e.g. agents, notebooks).
     """
     try:
-        loop = asyncio.get_running_loop()
+        asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.run(coro)
 

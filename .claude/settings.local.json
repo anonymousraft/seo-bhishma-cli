@@ -59,7 +59,19 @@
       "Bash(python -m pytest tests/ -q)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(xargs grep -l \"v3\\\\|v2\\\\|migration\")",
+      "Bash(sed 's/\\\\.py//')",
+      "Bash(sed 's/.*test_//')",
+      "Bash(sed 's/_[^_]*$//')",
+      "PowerShell(python --version; python -c \"import sys; print\\(sys.executable\\)\")",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pip install --upgrade pip 2>&1 | Select-Object -Last 3)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pip install -e . 2>&1 | Select-Object -Last 20)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pip install --no-cache-dir -e . 2>&1 | Select-Object -Last 30)",
+      "PowerShell(Write-Output \"=== v3 core imports \\(should work\\) ===\"; & .\\\\.venv\\\\Scripts\\\\python.exe -c \"from seo_bhishma.core.link_sniper import check_backlink; from seo_bhishma.core.site_mapper import download_sitemap; from seo_bhishma.core.sitemap_generator import generate_sitemap; from seo_bhishma.core.redirection_genius import tfidf_similarity; print\\('all 4 core modules import OK'\\)\" 2>&1; Write-Output \"`n=== v3 models \\(should work\\) ===\"; & .\\\\.venv\\\\Scripts\\\\python.exe -c \"from seo_bhishma.models.link_sniper import BacklinkCheckResult; r = BacklinkCheckResult\\(backlink_url='a', target_url='b', status='Live', anchor_status='Present', link_exists='Yes'\\); print\\(r.model_dump_json\\(\\)\\)\" 2>&1; Write-Output \"`n=== Install MCP extra to fix seo-bhishma-mcp ===\"; & .\\\\.venv\\\\Scripts\\\\python.exe -m pip install --no-cache-dir -e \".[mcp]\" 2>&1 | Select-Object -Last 3)",
+      "PowerShell(seo-bhishma-cli *)",
+      "PowerShell(& .\\\\.venv\\\\Scripts\\\\python.exe -m pip install --no-cache-dir -e \".[dev]\" 2>&1)",
+      "PowerShell(& .\\\\.venv\\\\Scripts\\\\python.exe -c \"from langgraph.prebuilt import create_react_agent; from langchain_openai import ChatOpenAI; from langchain_anthropic import ChatAnthropic; from langchain_core.tools import tool; print\\('langgraph + langchain stack imports OK'\\)\" 2>&1)"
     ]
   }
 }

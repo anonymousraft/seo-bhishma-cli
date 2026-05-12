@@ -1,16 +1,13 @@
+from seo_bhishma.core.domain_insight import (
+    check_urls_against_robots,
+    is_valid_domain_or_url,
+    parse_robots_txt,
+)
 from seo_bhishma.models.domain_insight import (
     DnsRecords,
     IpDetails,
-    ReverseIpResult,
-    RobotsCheckResult,
     RobotsTxtResult,
     TechStackResult,
-    WhoisInfo,
-)
-from seo_bhishma.core.domain_insight import (
-    is_valid_domain_or_url,
-    parse_robots_txt,
-    check_urls_against_robots,
 )
 
 

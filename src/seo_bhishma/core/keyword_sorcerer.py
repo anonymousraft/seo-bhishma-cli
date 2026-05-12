@@ -71,7 +71,10 @@ def generate_embeddings(
                     {"role": "system", "content": "You are a helpful assistant."},
                     {
                         "role": "user",
-                        "content": f"Generate a descriptive sentence that captures the intent for the keyword: {keyword}",
+                        "content": (
+                            "Generate a descriptive sentence that captures "
+                            f"the intent for the keyword: {keyword}"
+                        ),
                     },
                 ],
                 max_tokens=50,

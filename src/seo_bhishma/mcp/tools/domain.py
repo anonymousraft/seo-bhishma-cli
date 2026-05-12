@@ -126,6 +126,8 @@ def register(mcp: FastMCP) -> None:
         """
         from seo_bhishma.core.domain_insight import (
             check_urls_against_robots as _check,
+        )
+        from seo_bhishma.core.domain_insight import (
             fetch_robots_txt as _fetch,
         )
 

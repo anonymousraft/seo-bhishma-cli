@@ -3,7 +3,6 @@
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from difflib import SequenceMatcher
 from urllib.parse import urlparse
 
 import numpy as np

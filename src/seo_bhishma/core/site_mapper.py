@@ -7,7 +7,6 @@ import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from seo_bhishma.core._http import DEFAULT_TIMEOUT, requests_retry_session
-from seo_bhishma.core._utils import extract_domain
 from seo_bhishma.models.common import ProgressCallback
 from seo_bhishma.models.site_mapper import SitemapParseResult, SitemapUrl
 

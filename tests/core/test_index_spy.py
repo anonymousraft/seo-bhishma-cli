@@ -1,3 +1,4 @@
+from seo_bhishma.core.index_spy import _parse_indexing_html
 from seo_bhishma.models.index_spy import (
     BatchIndexCheckResult,
     CaptchaConfig,
@@ -6,7 +7,6 @@ from seo_bhishma.models.index_spy import (
     IndexCheckResult,
     ProxyConfig,
 )
-from seo_bhishma.core.index_spy import _parse_indexing_html
 
 
 def test_check_method_enum():
